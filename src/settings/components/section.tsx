@@ -16,7 +16,7 @@ export default function Section( {
 	children: ReactNode;
 } ) {
 	return (
-		<section className="arc-section" aria-label={ title }>
+		<section className="content-for-agents-section" aria-label={ title }>
 			<h2>{ title }</h2>
 			{ description && <p>{ description }</p> }
 			{ state.notice && (
@@ -24,7 +24,7 @@ export default function Section( {
 					{ state.notice.message }
 				</Notice>
 			) }
-			<fieldset disabled={ state.busy } className="arc-fields">
+			<fieldset disabled={ state.busy } className="content-for-agents-fields">
 				<legend className="screen-reader-text">{ title }</legend>
 				{ children }
 				<Button
@@ -35,7 +35,7 @@ export default function Section( {
 				>
 					{ sprintf(
 						/* translators: %s: Settings section name. */
-						__( 'Save %s', 'agent-ready-content' ),
+						__( 'Save %s', 'content-for-agents' ),
 						title
 					) }
 				</Button>

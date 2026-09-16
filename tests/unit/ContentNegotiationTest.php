@@ -3,12 +3,12 @@
 /**
  * Content negotiation unit tests.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content\Tests\Unit;
+namespace Content_For_Agents\Tests\Unit;
 
-use Agent_Ready_Content\Content_Negotiation;
+use Content_For_Agents\Content_Negotiation;
 use PHPUnit\Framework\TestCase;
 
 /**

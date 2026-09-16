@@ -2,9 +2,9 @@
 >
 > This plugin is currently in beta, and breaking changes could occur with any update. Do not use it in production environments.
 
-# Agent Ready Content
+# Content for Agents
 
-Agent Ready Content is a WordPress VIP plugin that publishes posts and pages as
+Content for Agents is a WordPress VIP plugin that publishes posts and pages as
 Markdown and provides `/llms.txt` discovery. It requires WordPress 6.8 or newer,
 PHP 8.2 or newer, and the WordPress VIP platform runtime.
 
@@ -30,26 +30,26 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
 ## Installation
 
 Install the packaged plugin ZIP in your WordPress plugins directory, then
-activate **Agent Ready Content**. On WordPress VIP, follow the guidance for
+activate **Content for Agents**. On WordPress VIP, follow the guidance for
 [activating plugins through code](https://docs.wpvip.com/how-tos/activate-plugins-through-code/):
 
 ```php
-wpcom_vip_load_plugin( 'agent-ready-content' );
+wpcom_vip_load_plugin( 'content-for-agents' );
 ```
 
-Load integration plugins after Agent Ready Content. Each integration owns and
+Load integration plugins after Content for Agents. Each integration owns and
 loads its individual dependencies; the base plugin does not require an
 integration framework or provider-specific packages.
 
 If you are working from a source checkout, follow the build instructions in the
-[contributor guide](https://github.com/Automattic/agent-ready-content/blob/trunk/docs/CONTRIBUTING.md).
+[contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).
 
-Use **Settings → Agent Ready Content** to edit the site summary, About links,
+Use **Settings → Content for Agents** to edit the site summary, About links,
 categories, featured posts, and additional resources. The site name and tagline
 provide neutral defaults.
 
 ## Documentation
 
 - [Plugin behavior and extension contracts](docs/PLUGIN-GUIDE.md)
-- [Development and contributing](https://github.com/Automattic/agent-ready-content/blob/trunk/docs/CONTRIBUTING.md)
+- [Development and contributing](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md)
 - [Attribution](docs/NOTICE.md)

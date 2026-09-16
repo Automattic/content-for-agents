@@ -1,4 +1,4 @@
-# Contributing to Agent Ready Content
+# Contributing to Content for Agents
 
 This guide covers the quickest path from a new checkout to a validated change.
 The public behavior and supported extension contracts are documented in the
@@ -49,7 +49,7 @@ are ignored and must not be committed.
 The plugin deliberately uses a small, direct bootstrap:
 
 ```text
-agent-ready-content.php
+content-for-agents.php
   -> plugins_loaded: Bootstrap creates and registers the modules
   -> init: supported post types and block callbacks are registered
   -> parse_request/template_redirect: Markdown and /llms.txt requests are handled
@@ -72,7 +72,7 @@ The main responsibilities are divided as follows:
 | Cache invalidation              | `Markdown_Cache_Invalidator`, `Llms_Txt_Cache_Invalidator`                                               |
 | Admin interface and REST routes | `Settings` and `src/settings/`                                                                           |
 
-Public PHP classes are direct members of the `Agent_Ready_Content` namespace.
+Public PHP classes are direct members of the `Content_For_Agents` namespace.
 Integration plugins use their own namespaces and autoloaders. Preserve the
 extension contracts in the README when changing hooks, identifiers, callback
 precedence, REST routes, options, metadata, or cache behavior.
@@ -121,13 +121,13 @@ assets can be generated from source.
 
 - To support a custom block, use the registry or block metadata described in
   [Extend the base](PLUGIN-GUIDE.md#extend-the-base).
-- To expose another post type, add the `agent-ready-content` support flag. Add
-  `agent-ready-content-llms-txt` when changes to that type affect discovery.
+- To expose another post type, add the `content-for-agents` support flag. Add
+  `content-for-agents-llms-txt` when changes to that type affect discovery.
 - To add an `/llms.txt` section, filter
-  `agent_ready_content_llms_txt_sections` using the documented section shape.
+  `content_for_agents_llms_txt_sections` using the documented section shape.
 - To provide editable starter settings, use
-  `agent_ready_content_settings_defaults`. Use
-  `agent_ready_content_additional_resources_blocks` for integration-maintained
+  `content_for_agents_settings_defaults`. Use
+  `content_for_agents_additional_resources_blocks` for integration-maintained
   resources.
 - When related data changes, identify the affected post IDs and use the public
   cache invalidators described in [Cache invalidation](PLUGIN-GUIDE.md#cache-invalidation).
@@ -143,9 +143,9 @@ that changes output does not automatically invalidate an already cached result.
 The base plugin and integrations are separate release units.
 
 The base version appears in `package.json`, its lockfile, the plugin header, and
-`AGENT_READY_CONTENT_VERSION`. The **Create release PR** workflow updates these
+`CONTENT_FOR_AGENTS_VERSION`. The **Create release PR** workflow updates these
 values. After that version change reaches `trunk`, the release workflow builds
-`agent-ready-content.zip`, creates the matching `v{version}` tag, and publishes
+`content-for-agents.zip`, creates the matching `v{version}` tag, and publishes
 the ZIP. The root package allowlist excludes development files and provider-specific
 integrations.
 

@@ -2,12 +2,12 @@
 /**
  * Site-wide /llms.txt endpoint for AI agent discovery.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
 declare( strict_types=1 );
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -17,16 +17,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Serves /llms.txt in the llmstxt.org shape and aggregates typed section descriptors.
  *
  * Plugins may append Additional Resources subsections via
- * `agent_ready_content_additional_resources_blocks`.
+ * `content_for_agents_additional_resources_blocks`.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class LLMs_Txt {
 
 	/**
 	 * Object cache group for the rendered /llms.txt body.
 	 */
-	public const CACHE_GROUP = 'agent_ready_content_llms_txt';
+	public const CACHE_GROUP = 'content_for_agents_llms_txt';
 
 	/**
 	 * Object cache key for the rendered body.
@@ -61,13 +61,13 @@ class LLMs_Txt {
 	 * @param Loader $loader Loader instance.
 	 */
 	public function __construct( Loader $loader ) {
-		add_post_type_support( 'post', 'agent-ready-content-llms-txt' );
+		add_post_type_support( 'post', 'content-for-agents-llms-txt' );
 
 		$loader->add_action( 'parse_request', $this, 'maybe_serve', 0 );
-		$loader->add_filter( 'agent_ready_content_llms_txt_sections', $this, 'register_about_section', 5 );
-		$loader->add_filter( 'agent_ready_content_llms_txt_sections', $this, 'register_categories_section', 7 );
-		$loader->add_filter( 'agent_ready_content_llms_txt_sections', $this, 'register_featured_posts_section', 10 );
-		$loader->add_filter( 'agent_ready_content_llms_txt_sections', $this, 'append_additional_resources', 999 );
+		$loader->add_filter( 'content_for_agents_llms_txt_sections', $this, 'register_about_section', 5 );
+		$loader->add_filter( 'content_for_agents_llms_txt_sections', $this, 'register_categories_section', 7 );
+		$loader->add_filter( 'content_for_agents_llms_txt_sections', $this, 'register_featured_posts_section', 10 );
+		$loader->add_filter( 'content_for_agents_llms_txt_sections', $this, 'append_additional_resources', 999 );
 	}
 
 	/**
@@ -132,7 +132,7 @@ class LLMs_Txt {
 	 */
 	public static function collect_sections(): array {
 		/** @var array<int, array<string, mixed>> $raw_sections */
-		$raw_sections = apply_filters( 'agent_ready_content_llms_txt_sections', array() );
+		$raw_sections = apply_filters( 'content_for_agents_llms_txt_sections', array() );
 
 		if ( ! is_array( $raw_sections ) ) {
 			return array();
@@ -378,7 +378,7 @@ class LLMs_Txt {
 
 		return array(
 			'slug'        => 'about',
-			'title'       => __( 'About', 'agent-ready-content' ),
+			'title'       => __( 'About', 'content-for-agents' ),
 			'description' => (string) ( $settings['about_description'] ?? '' ),
 			'links'       => $links,
 		);
@@ -418,8 +418,8 @@ class LLMs_Txt {
 	public static function get_categories_section(): array {
 		return array(
 			'slug'        => 'categories',
-			'title'       => __( 'Categories', 'agent-ready-content' ),
-			'description' => __( 'Browse content by category.', 'agent-ready-content' ),
+			'title'       => __( 'Categories', 'content-for-agents' ),
+			'description' => __( 'Browse content by category.', 'content-for-agents' ),
 			'links'       => self::get_category_links(),
 		);
 	}
@@ -576,8 +576,8 @@ class LLMs_Txt {
 
 		return array(
 			'slug'        => 'featured-posts',
-			'title'       => __( 'Featured posts', 'agent-ready-content' ),
-			'description' => __( 'Selected posts from this site.', 'agent-ready-content' ),
+			'title'       => __( 'Featured posts', 'content-for-agents' ),
+			'description' => __( 'Selected posts from this site.', 'content-for-agents' ),
 			'links'       => $links,
 		);
 	}
@@ -596,7 +596,7 @@ class LLMs_Txt {
 
 		$sections[] = array(
 			'slug'        => 'additional-resources',
-			'title'       => __( 'Additional Resources', 'agent-ready-content' ),
+			'title'       => __( 'Additional Resources', 'content-for-agents' ),
 			'description' => $description,
 			'links'       => array(),
 		);
@@ -664,7 +664,7 @@ class LLMs_Txt {
 		}
 
 		$links[] = array(
-			'title' => __( 'See all →', 'agent-ready-content' ),
+			'title' => __( 'See all →', 'content-for-agents' ),
 			'url'   => $archive_url,
 		);
 

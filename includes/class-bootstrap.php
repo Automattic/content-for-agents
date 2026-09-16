@@ -3,15 +3,15 @@
 /**
  * Bootstrap class.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Bootstrap class for plugin initialization.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Bootstrap {
 
@@ -41,8 +41,8 @@ class Bootstrap {
 		// Allow the content transformer (and others) to signal which provider
 		// is driving the current markdown conversion so block callbacks can
 		// branch their output (e.g. charts → PNG image in email context).
-		add_action( 'agent_ready_content_set_context', array( Block_Markdown_Registry::class, 'set_context' ) );
-		add_action( 'agent_ready_content_clear_context', array( Block_Markdown_Registry::class, 'clear_context' ) );
+		add_action( 'content_for_agents_set_context', array( Block_Markdown_Registry::class, 'set_context' ) );
+		add_action( 'content_for_agents_clear_context', array( Block_Markdown_Registry::class, 'clear_context' ) );
 
 		new Content_Negotiation( $this->loader );
 		new Rewrite_Rules( $this->loader );
@@ -80,7 +80,7 @@ class Bootstrap {
 		 *
 		 * @since 1.0.0
 		 */
-		do_action( 'agent_ready_content_register_block_callbacks' );
+		do_action( 'content_for_agents_register_block_callbacks' );
 	}
 
 	/**
@@ -89,8 +89,8 @@ class Bootstrap {
 	 * @hook init
 	 */
 	public function register_default_post_type_support() {
-		add_post_type_support( 'post', 'agent-ready-content' );
-		add_post_type_support( 'page', 'agent-ready-content' );
+		add_post_type_support( 'post', 'content-for-agents' );
+		add_post_type_support( 'page', 'content-for-agents' );
 	}
 
 	/**

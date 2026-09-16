@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       Agent Ready Content
+ * Plugin Name:       Content for Agents
  * Description:       Publish WordPress VIP content as Markdown with agent discovery and extensible block conversion.
  * Version:           0.3.0
  * Requires at least: 6.8
@@ -9,34 +9,34 @@
  * Author URI:        https://wpvip.com
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       agent-ready-content
+ * Text Domain:       content-for-agents
  *
  * Derived from PRC Markdown for Agents by Pew Research Center.
  * Original copyright 2025 Pew Research Center. See docs/NOTICE.md and LICENSE.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-if ( defined( 'AGENT_READY_CONTENT_LOADED' ) ) {
+if ( defined( 'CONTENT_FOR_AGENTS_LOADED' ) ) {
 	return;
 }
 
-define( 'AGENT_READY_CONTENT_LOADED', true );
-define( 'AGENT_READY_CONTENT_FILE', __FILE__ );
-define( 'AGENT_READY_CONTENT_DIR', plugin_dir_path( __FILE__ ) );
-define( 'AGENT_READY_CONTENT_URL', plugin_dir_url( __FILE__ ) );
-define( 'AGENT_READY_CONTENT_VERSION', '0.3.0' );
+define( 'CONTENT_FOR_AGENTS_LOADED', true );
+define( 'CONTENT_FOR_AGENTS_FILE', __FILE__ );
+define( 'CONTENT_FOR_AGENTS_DIR', plugin_dir_path( __FILE__ ) );
+define( 'CONTENT_FOR_AGENTS_URL', plugin_dir_url( __FILE__ ) );
+define( 'CONTENT_FOR_AGENTS_VERSION', '0.3.0' );
 
 // Dedicated Markdown URLs are safe by default. Enable header negotiation only
 // after confirming that the site's page cache separates HTML and Markdown.
-if ( ! defined( 'AGENT_READY_CONTENT_ENABLE_ACCEPT_NEGOTIATION' ) ) {
-	define( 'AGENT_READY_CONTENT_ENABLE_ACCEPT_NEGOTIATION', false );
+if ( ! defined( 'CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION' ) ) {
+	define( 'CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION', false );
 }
 
 // Autoload top-level plugin classes using WordPress filename conventions.
@@ -56,7 +56,7 @@ spl_autoload_register(
 		}
 
 		$file_name = 'class-' . strtolower( str_replace( '_', '-', $class_name ) ) . '.php';
-		$file_path = AGENT_READY_CONTENT_DIR . 'includes/' . $file_name;
+		$file_path = CONTENT_FOR_AGENTS_DIR . 'includes/' . $file_name;
 
 		if ( is_readable( $file_path ) ) {
 			require_once $file_path;

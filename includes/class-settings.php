@@ -2,12 +2,12 @@
 /**
  * Settings page and REST API for Markdown for Agents.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
 declare( strict_types=1 );
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -19,13 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Cookie-authenticated REST requests are nonce-verified automatically via
  * rest_cookie_check_errors; the React app must use createNonceMiddleware.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Settings {
 
-	public const OPTION_KEY      = 'agent_ready_content_settings';
-	public const REST_NAMESPACE  = 'agent-ready-content/v1';
-	public const ADMIN_PAGE_SLUG = 'agent-ready-content-settings';
+	public const OPTION_KEY      = 'content_for_agents_settings';
+	public const REST_NAMESPACE  = 'content-for-agents/v1';
+	public const ADMIN_PAGE_SLUG = 'content-for-agents-settings';
 
 	/**
 	 * Maximum additional-resources blocks stored in settings.
@@ -78,7 +78,7 @@ class Settings {
 			$stored = array();
 		}
 
-		$defaults = apply_filters( 'agent_ready_content_settings_defaults', self::$defaults );
+		$defaults = apply_filters( 'content_for_agents_settings_defaults', self::$defaults );
 		$merged   = array_merge( self::$defaults, is_array( $defaults ) ? $defaults : array(), $stored );
 
 		$summary   = is_scalar( $merged['site_summary'] ) ? trim( (string) $merged['site_summary'] ) : '';
@@ -90,7 +90,7 @@ class Settings {
 		 *
 		 * @param array $resources Normalized resource blocks.
 		 */
-		$resources = apply_filters( 'agent_ready_content_additional_resources_blocks', $resources );
+		$resources = apply_filters( 'content_for_agents_additional_resources_blocks', $resources );
 
 		return array(
 			'site_summary'                => '' !== $summary ? $summary : self::get_default_site_summary(),
@@ -232,8 +232,8 @@ class Settings {
 	public function register_admin_page(): void {
 		add_submenu_page(
 			'options-general.php',
-			__( 'Agent Ready Content Settings', 'agent-ready-content' ),
-			__( 'Agent Ready Content', 'agent-ready-content' ),
+			__( 'Content for Agents Settings', 'content-for-agents' ),
+			__( 'Content for Agents', 'content-for-agents' ),
 			'manage_options',
 			self::ADMIN_PAGE_SLUG,
 			array( $this, 'render_admin_page' )
@@ -241,7 +241,7 @@ class Settings {
 	}
 
 	public function render_admin_page(): void {
-		echo '<div class="wrap"><div id="agent-ready-content-settings-admin"></div></div>';
+		echo '<div class="wrap"><div id="content-for-agents-settings-admin"></div></div>';
 	}
 
 	/** @hook admin_enqueue_scripts */
@@ -256,11 +256,11 @@ class Settings {
 		}
 
 		$asset  = require $asset_file;
-		$handle = 'agent-ready-content-settings';
+		$handle = 'content-for-agents-settings';
 
 		wp_enqueue_script(
 			$handle,
-			plugins_url( 'build/settings/index.js', AGENT_READY_CONTENT_FILE ),
+			plugins_url( 'build/settings/index.js', CONTENT_FOR_AGENTS_FILE ),
 			$asset['dependencies'],
 			$asset['version'],
 			true
@@ -272,7 +272,7 @@ class Settings {
 
 			wp_enqueue_style(
 				$handle,
-				plugins_url( 'build/settings/style-index.css', AGENT_READY_CONTENT_FILE ),
+				plugins_url( 'build/settings/style-index.css', CONTENT_FOR_AGENTS_FILE ),
 				$style_deps,
 				$asset['version']
 			);
@@ -280,7 +280,7 @@ class Settings {
 
 		wp_add_inline_script(
 			$handle,
-			'window.agentReadyContentSettings = ' . wp_json_encode(
+			'window.contentForAgentsSettings = ' . wp_json_encode(
 				array(
 					'llmsTxtUrl' => home_url( '/llms.txt' ),
 					'restUrl'    => rest_url(),
@@ -290,7 +290,7 @@ class Settings {
 			'before'
 		);
 
-		wp_set_script_translations( $handle, 'agent-ready-content' );
+		wp_set_script_translations( $handle, 'content-for-agents' );
 	}
 
 	/** @hook rest_api_init */

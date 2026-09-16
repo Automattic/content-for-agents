@@ -3,15 +3,15 @@
 /**
  * Rewrite rules for .md and /markdown URL endpoints.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Handles .md and /markdown URL endpoints (e.g. /politics/2025/01/my-article.md or .../my-article/markdown).
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Rewrite_Rules {
 
@@ -149,7 +149,7 @@ class Rewrite_Rules {
 	 * @return bool
 	 */
 	private function can_serve_markdown_for_post( \WP_Post $post ): bool {
-		if ( ! post_type_supports( $post->post_type, 'agent-ready-content' ) ) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
 			return false;
 		}
 

@@ -19,7 +19,7 @@ export default function App() {
 			<Notice status="error" isDismissible={ false }>
 				{ error }{ ' ' }
 				<Button variant="secondary" onClick={ () => setAttempt( previous => previous + 1 ) }>
-					{ __( 'Retry', 'agent-ready-content' ) }
+					{ __( 'Retry', 'content-for-agents' ) }
 				</Button>
 			</Notice>
 		);
@@ -45,11 +45,11 @@ export default function App() {
 		);
 	}
 	return (
-		<div className="arc-settings">
-			<h1>{ __( 'Agent Ready Content', 'agent-ready-content' ) }</h1>
+		<div className="content-for-agents-settings">
+			<h1>{ __( 'Content for Agents', 'content-for-agents' ) }</h1>
 			<p>
-				{ __( 'Choose what appears in your site’s agent discovery index.', 'agent-ready-content' ) }{ ' ' }
-				<a href={ config.llmsTxtUrl }>{ __( 'View /llms.txt', 'agent-ready-content' ) }</a>
+				{ __( 'Choose what appears in your site’s agent discovery index.', 'content-for-agents' ) }{ ' ' }
+				<a href={ config.llmsTxtUrl }>{ __( 'View /llms.txt', 'content-for-agents' ) }</a>
 			</p>
 			{ content }
 		</div>

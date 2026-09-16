@@ -21,27 +21,27 @@ export default function Resources( { settings, onSaved, saveSettings }: SectionP
 		change( items.map( ( item, i ) => ( i === index ? { ...item, [ field ]: value } : item ) ) );
 	return (
 		<Section
-			title={ __( 'Additional resources', 'agent-ready-content' ) }
+			title={ __( 'Additional resources', 'content-for-agents' ) }
 			state={ state }
 			description={ __(
 				'Add ordered subsections containing plain text or Markdown.',
-				'agent-ready-content'
+				'content-for-agents'
 			) }
 		>
-			<ol className="arc-list">
+			<ol className="content-for-agents-list">
 				{ items.map( ( item, index ) => (
 					<li key={ item.id }>
 						<TextControl
 							__nextHasNoMarginBottom
 							__next40pxDefaultSize
-							label={ __( 'Title', 'agent-ready-content' ) }
+							label={ __( 'Title', 'content-for-agents' ) }
 							value={ item.title }
 							onChange={ value => update( index, 'title', value ) }
 						/>
 						<TextareaControl
 							__nextHasNoMarginBottom
 							rows={ 6 }
-							label={ __( 'Content', 'agent-ready-content' ) }
+							label={ __( 'Content', 'content-for-agents' ) }
 							value={ item.body }
 							onChange={ value => update( index, 'body', value ) }
 						/>
@@ -49,21 +49,21 @@ export default function Resources( { settings, onSaved, saveSettings }: SectionP
 							items={ items }
 							index={ index }
 							onChange={ change }
-							label={ item.title || __( 'Untitled item', 'agent-ready-content' ) }
+							label={ item.title || __( 'Untitled item', 'content-for-agents' ) }
 						/>
 					</li>
 				) ) }
 			</ol>
-			<p>{ __( 'Items without a title are omitted when saved.', 'agent-ready-content' ) }</p>
+			<p>{ __( 'Items without a title are omitted when saved.', 'content-for-agents' ) }</p>
 			<Button
 				variant="secondary"
 				disabled={ items.length >= 20 }
 				onClick={ () => change( [ ...items, { id: newId(), title: '', body: '' } ] ) }
 			>
-				{ __( 'Add resource', 'agent-ready-content' ) }
+				{ __( 'Add resource', 'content-for-agents' ) }
 			</Button>
 			{ items.length >= 20 && (
-				<p>{ __( 'Maximum of 20 items reached.', 'agent-ready-content' ) }</p>
+				<p>{ __( 'Maximum of 20 items reached.', 'content-for-agents' ) }</p>
 			) }
 		</Section>
 	);

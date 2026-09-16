@@ -3,39 +3,39 @@
 /**
  * WordPress integration test bootstrap.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-$agent_ready_content_tests_dir = (string) getenv( 'WP_TESTS_DIR' );
-if ( '' === $agent_ready_content_tests_dir ) {
-	$agent_ready_content_tests_dir = (string) getenv( 'WP_PHPUNIT__DIR' );
+$content_for_agents_tests_dir = (string) getenv( 'WP_TESTS_DIR' );
+if ( '' === $content_for_agents_tests_dir ) {
+	$content_for_agents_tests_dir = (string) getenv( 'WP_PHPUNIT__DIR' );
 }
 
-if ( ! file_exists( $agent_ready_content_tests_dir . '/includes/functions.php' ) ) {
+if ( ! file_exists( $content_for_agents_tests_dir . '/includes/functions.php' ) ) {
 	echo 'Could not find the WordPress test library.' . PHP_EOL; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	exit( 1 );
 }
 
-$agent_ready_content_polyfills = __DIR__ . '/../../vendor/yoast/phpunit-polyfills';
-if ( ! defined( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' ) && is_dir( $agent_ready_content_polyfills ) ) {
+$content_for_agents_polyfills = __DIR__ . '/../../vendor/yoast/phpunit-polyfills';
+if ( ! defined( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' ) && is_dir( $content_for_agents_polyfills ) ) {
 	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- Required by the WordPress test library.
-	define( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH', $agent_ready_content_polyfills );
+	define( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH', $content_for_agents_polyfills );
 }
 
-require_once $agent_ready_content_tests_dir . '/includes/functions.php';
+require_once $content_for_agents_tests_dir . '/includes/functions.php';
 
 tests_add_filter(
 	'muplugins_loaded',
 	static function (): void {
-		require __DIR__ . '/../../agent-ready-content.php';
+		require __DIR__ . '/../../content-for-agents.php';
 
 		add_action(
-			'agent_ready_content_register_block_callbacks',
+			'content_for_agents_register_block_callbacks',
 			static function (): void {
-				\Agent_Ready_Content\Block_Markdown_Registry::register(
-					'agent-ready-content/test-block',
+				\Content_For_Agents\Block_Markdown_Registry::register(
+					'content-for-agents/test-block',
 					static function ( array $block ): string {
 						return '**' . ( $block['attrs']['text'] ?? '' ) . '**';
 					}
@@ -45,4 +45,4 @@ tests_add_filter(
 	}
 );
 
-require $agent_ready_content_tests_dir . '/includes/bootstrap.php';
+require $content_for_agents_tests_dir . '/includes/bootstrap.php';

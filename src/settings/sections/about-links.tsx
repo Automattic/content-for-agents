@@ -16,17 +16,17 @@ export default function AboutLinks( { settings, onSaved, saveSettings }: Section
 		change( items.map( ( item, i ) => ( i === index ? { ...item, [ field ]: value } : item ) ) );
 	return (
 		<Section
-			title={ __( 'About links', 'agent-ready-content' ) }
+			title={ __( 'About links', 'content-for-agents' ) }
 			state={ state }
-			description={ __( 'Add ordered links to useful pages on your site.', 'agent-ready-content' ) }
+			description={ __( 'Add ordered links to useful pages on your site.', 'content-for-agents' ) }
 		>
-			<ol className="arc-list">
+			<ol className="content-for-agents-list">
 				{ items.map( ( item, index ) => (
 					<li key={ item.id }>
 						<TextControl
 							__nextHasNoMarginBottom
 							__next40pxDefaultSize
-							label={ __( 'Title', 'agent-ready-content' ) }
+							label={ __( 'Title', 'content-for-agents' ) }
 							value={ item.title }
 							onChange={ value => update( index, 'title', value ) }
 						/>
@@ -34,14 +34,14 @@ export default function AboutLinks( { settings, onSaved, saveSettings }: Section
 							__nextHasNoMarginBottom
 							__next40pxDefaultSize
 							type="url"
-							label={ __( 'URL', 'agent-ready-content' ) }
+							label={ __( 'URL', 'content-for-agents' ) }
 							value={ item.url }
 							onChange={ value => update( index, 'url', value ) }
 						/>
 						<TextControl
 							__nextHasNoMarginBottom
 							__next40pxDefaultSize
-							label={ __( 'Description', 'agent-ready-content' ) }
+							label={ __( 'Description', 'content-for-agents' ) }
 							value={ item.description }
 							onChange={ value => update( index, 'description', value ) }
 						/>
@@ -49,7 +49,7 @@ export default function AboutLinks( { settings, onSaved, saveSettings }: Section
 							items={ items }
 							index={ index }
 							onChange={ change }
-							label={ item.title || __( 'Untitled item', 'agent-ready-content' ) }
+							label={ item.title || __( 'Untitled item', 'content-for-agents' ) }
 						/>
 					</li>
 				) ) }
@@ -57,7 +57,7 @@ export default function AboutLinks( { settings, onSaved, saveSettings }: Section
 			<p>
 				{ __(
 					'Links need a title and a valid HTTP or HTTPS URL to be saved.',
-					'agent-ready-content'
+					'content-for-agents'
 				) }
 			</p>
 			<Button
@@ -67,10 +67,10 @@ export default function AboutLinks( { settings, onSaved, saveSettings }: Section
 					change( [ ...items, { id: newId(), title: '', url: '', description: '' } ] )
 				}
 			>
-				{ __( 'Add link', 'agent-ready-content' ) }
+				{ __( 'Add link', 'content-for-agents' ) }
 			</Button>
 			{ items.length >= 10 && (
-				<p>{ __( 'Maximum of 10 items reached.', 'agent-ready-content' ) }</p>
+				<p>{ __( 'Maximum of 10 items reached.', 'content-for-agents' ) }</p>
 			) }
 		</Section>
 	);

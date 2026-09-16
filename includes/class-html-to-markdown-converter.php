@@ -24,12 +24,12 @@
  * introducing external parsing dependencies. Uses WordPress core's HTML API
  * (WP_HTML_Processor, with fallback to WP_HTML_Tag_Processor).
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
 declare( strict_types=1 );
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 use WP_HTML_Processor;
 use WP_HTML_Tag_Processor;
@@ -37,7 +37,7 @@ use WP_HTML_Tag_Processor;
 /**
  * Converts HTML fragments into Markdown.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 final class HTML_To_Markdown_Converter {
 

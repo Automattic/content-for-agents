@@ -3,13 +3,13 @@
 /**
  * Markdown conversion integration tests.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content\Tests\Integration;
+namespace Content_For_Agents\Tests\Integration;
 
-use Agent_Ready_Content\Block_Markdown_Registry;
-use Agent_Ready_Content\Markdown_Converter;
+use Content_For_Agents\Block_Markdown_Registry;
+use Content_For_Agents\Markdown_Converter;
 
 /**
  * Exercises Markdown conversion in WordPress.
@@ -20,7 +20,7 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	 * The registration action remains available to integration plugins.
 	 */
 	public function test_block_registry_callback_is_registered_during_init(): void {
-		$this->assertTrue( Block_Markdown_Registry::has( 'agent-ready-content/test-block' ) );
+		$this->assertTrue( Block_Markdown_Registry::has( 'content-for-agents/test-block' ) );
 	}
 
 	/**
@@ -29,7 +29,7 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	public function test_registered_block_callback_converts_post_content(): void {
 		$post_id = self::factory()->post->create(
 			array(
-				'post_content' => '<!-- wp:agent-ready-content/test-block {"text":"Hello agents"} /-->',
+				'post_content' => '<!-- wp:content-for-agents/test-block {"text":"Hello agents"} /-->',
 				'post_status'  => 'draft',
 			)
 		);

@@ -44,7 +44,7 @@ jobs:
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
-          PLUGIN_VERSION=$(sed -n 's/.*Version: *//p' agent-ready-content.php | head -n1 | tr -d '[:space:]')
+          PLUGIN_VERSION=$(sed -n 's/.*Version: *//p' content-for-agents.php | head -n1 | tr -d '[:space:]')
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
 
           if [ "$PLUGIN_VERSION" != "$PACKAGE_VERSION" ]; then
@@ -55,18 +55,18 @@ jobs:
           npm version "$RELEASE_TYPE" --no-git-tag-version
           VERSION=$(node -p "require('./package.json').version")
 
-          perl -pi -e "s/Version:           \\Q$PLUGIN_VERSION\\E/Version:           $VERSION/" agent-ready-content.php
-          perl -pi -e "s/AGENT_READY_CONTENT_VERSION', '\\Q$PLUGIN_VERSION\\E'/AGENT_READY_CONTENT_VERSION', '$VERSION'/" agent-ready-content.php
+          perl -pi -e "s/Version:           \\Q$PLUGIN_VERSION\\E/Version:           $VERSION/" content-for-agents.php
+          perl -pi -e "s/CONTENT_FOR_AGENTS_VERSION', '\\Q$PLUGIN_VERSION\\E'/CONTENT_FOR_AGENTS_VERSION', '$VERSION'/" content-for-agents.php
 
-          if ! grep -q "Version:           $VERSION" agent-ready-content.php || \
-            ! grep -q "AGENT_READY_CONTENT_VERSION', '$VERSION'" agent-ready-content.php; then
+          if ! grep -q "Version:           $VERSION" content-for-agents.php || \
+            ! grep -q "CONTENT_FOR_AGENTS_VERSION', '$VERSION'" content-for-agents.php; then
             echo "Failed to update all plugin versions"
             exit 1
           fi
 
           BRANCH="release/v${VERSION}"
           git checkout -b "$BRANCH"
-          git add agent-ready-content.php package.json package-lock.json
+          git add content-for-agents.php package.json package-lock.json
           git commit -m "v${VERSION}"
 
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"

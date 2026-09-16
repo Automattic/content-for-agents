@@ -3,10 +3,10 @@
 /**
  * Markdown converter for block content.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Converts WordPress post content to Markdown.
@@ -15,7 +15,7 @@ namespace Agent_Ready_Content;
  * callback in Block_Markdown_Registry produce their own markdown; all
  * other blocks fall back to render_block() → HTML_To_Markdown_Converter.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Markdown_Converter {
 
@@ -27,7 +27,7 @@ class Markdown_Converter {
 	 */
 	public function post_to_markdown( $post ) {
 		$post_object = get_post( $post );
-		if ( ! $post_object || ! post_type_supports( $post_object->post_type, 'agent-ready-content' ) ) {
+		if ( ! $post_object || ! post_type_supports( $post_object->post_type, 'content-for-agents' ) ) {
 			return '';
 		}
 
@@ -41,7 +41,7 @@ class Markdown_Converter {
 		 * @param string|null $pre         Pre-built Markdown string, or null to use default conversion.
 		 * @param \WP_Post    $post_object The post being converted.
 		 */
-		$pre = apply_filters( 'agent_ready_content_pre_markdown', null, $post_object );
+		$pre = apply_filters( 'content_for_agents_pre_markdown', null, $post_object );
 		if ( null !== $pre ) {
 			return (string) $pre;
 		}
@@ -129,7 +129,7 @@ class Markdown_Converter {
 				 * @param \WP_Post $post     The post being converted.
 				 */
 				$block_md = apply_filters(
-					'agent_ready_content_block_' . $block_name,
+					'content_for_agents_block_' . $block_name,
 					$block_md,
 					$block,
 					$post
