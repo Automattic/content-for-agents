@@ -1,8 +1,8 @@
 # Plugin guide
 
-This guide describes Agent Ready Content's public behavior and extension
-contracts. For installation, see the [README](../README.md). For development
-setup and checks, see the [contributor guide](https://github.com/Automattic/agent-ready-content/blob/trunk/docs/CONTRIBUTING.md).
+This guide describes the public behavior and extension contracts of Content for
+Agents. For installation, see the [README](../README.md). For development
+setup and checks, see the [contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).
 
 ## Content and discovery
 
@@ -28,10 +28,10 @@ Classic Editor and other freeform post HTML use the same HTML conversion path,
 so the plugin does not require the Block Editor to be enabled.
 
 `Accept: text/markdown` negotiation is disabled by default. Enable
-`AGENT_READY_CONTENT_ENABLE_ACCEPT_NEGOTIATION` only after verifying that the
+`CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION` only after verifying that the
 site's cache separates negotiated Markdown from HTML. Discovery and dedicated
 URLs do not require it. The existing Content-Signal defaults are retained and
-can be configured with the `agent_ready_content_content_signal` option.
+can be configured with the `content_for_agents_content_signal` option.
 
 The plugin uses VIP URL lookup and edge-purge APIs when available, with core
 fallbacks for local development. `/llms.txt` is handled during `parse_request`,
@@ -42,15 +42,15 @@ verification.
 
 ## Extend the base
 
-All PHP classes live in `Agent_Ready_Content`. Hook names, options, cache groups,
-and the REST namespace use `agent_ready_content` / `agent-ready-content`.
+All PHP classes live in `Content_For_Agents`. Hook names, options, cache groups,
+and the REST namespace use `content_for_agents` / `content-for-agents`.
 
 Register a block callback before `init` priority 5. Integrations should register
 block types on `init`, after the plugin has installed its metadata filter:
 
 ```php
-add_action( 'agent_ready_content_register_block_callbacks', static function () {
-    \Agent_Ready_Content\Block_Markdown_Registry::register(
+add_action( 'content_for_agents_register_block_callbacks', static function () {
+    \Content_For_Agents\Block_Markdown_Registry::register(
         'example/quote',
         static function ( array $block, \WP_Post $post ): string {
             return '> ' . sanitize_text_field( $block['attrs']['text'] ?? '' );
@@ -68,7 +68,7 @@ A block can alternatively declare metadata in `block.json`:
 
 ```json
 {
-	"agentReadyContent": {
+	"contentForAgents": {
 		"callback": "Example\\Markdown::convert"
 	}
 }
@@ -77,19 +77,19 @@ A block can alternatively declare metadata in `block.json`:
 The callable must be loaded before conversion. Metadata modes `strip` and
 `children-only` take precedence over metadata callbacks; metadata handling takes
 precedence over registry callbacks. Registry output then passes through
-`agent_ready_content_block_{block-name}`. That filter does not run for the
+`content_for_agents_block_{block-name}`. That filter does not run for the
 metadata path. Preserve this distinction when adding integrations.
 
-| Extension point                                                         | Contract                                                                                                                                |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `agent_ready_content_pre_markdown`                                      | Return `null` to continue, or a string to supply the document body before block conversion. Receives the post.                          |
-| `agent_ready_content_after_markdown`                                    | Filter the body when serving a document. Direct `post_to_markdown()` calls do not run this filter.                                      |
-| `agent_ready_content_authors`                                           | Return author entries containing `name` and optional `job_title` and `link`; receives the post.                                         |
-| `agent_ready_content_frontmatter`                                       | Filter the metadata array; receives the post.                                                                                           |
-| `agent_ready_content_llms_txt_sections`                                 | Append section arrays with `slug`, `title`, `links`, and optional `description`. Duplicate slugs keep the first section.                |
-| `agent_ready_content_additional_resources_blocks`                       | Filter resource blocks containing `id`, `title`, and `body`.                                                                            |
-| `agent_ready_content_settings_defaults`                                 | Supply defaults for unsaved settings without overwriting saved values.                                                                  |
-| `agent_ready_content_set_context` / `agent_ready_content_clear_context` | Set or clear a conversion context. Read it with `Block_Markdown_Registry::get_context()`. Use `try/finally` to clear it after failures. |
+| Extension point                                                       | Contract                                                                                                                                |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `content_for_agents_pre_markdown`                                     | Return `null` to continue, or a string to supply the document body before block conversion. Receives the post.                          |
+| `content_for_agents_after_markdown`                                   | Filter the body when serving a document. Direct `post_to_markdown()` calls do not run this filter.                                      |
+| `content_for_agents_authors`                                          | Return author entries containing `name` and optional `job_title` and `link`; receives the post.                                         |
+| `content_for_agents_frontmatter`                                      | Filter the metadata array; receives the post.                                                                                           |
+| `content_for_agents_llms_txt_sections`                                | Append section arrays with `slug`, `title`, `links`, and optional `description`. Duplicate slugs keep the first section.                |
+| `content_for_agents_additional_resources_blocks`                      | Filter resource blocks containing `id`, `title`, and `body`.                                                                            |
+| `content_for_agents_settings_defaults`                                | Supply defaults for unsaved settings without overwriting saved values.                                                                  |
+| `content_for_agents_set_context` / `content_for_agents_clear_context` | Set or clear a conversion context. Read it with `Block_Markdown_Registry::get_context()`. Use `try/finally` to clear it after failures. |
 
 ### Common filter examples
 
@@ -98,7 +98,7 @@ frontmatter fields:
 
 ```php
 add_filter(
-	'agent_ready_content_authors',
+	'content_for_agents_authors',
 	static function ( array $authors, \WP_Post $post ): array {
 		$credit = get_post_meta( $post->ID, 'article_credit', true );
 
@@ -111,7 +111,7 @@ add_filter(
 );
 
 add_filter(
-	'agent_ready_content_frontmatter',
+	'content_for_agents_frontmatter',
 	static function ( array $data, \WP_Post $post ): array {
 		$data['language'] = get_post_meta( $post->ID, 'language', true ) ?: 'en';
 		return $data;
@@ -125,7 +125,7 @@ Append a small link section directly to `/llms.txt`:
 
 ```php
 add_filter(
-	'agent_ready_content_llms_txt_sections',
+	'content_for_agents_llms_txt_sections',
 	static function ( array $sections ): array {
 		$sections[] = array(
 			'slug'  => 'policies',
@@ -148,7 +148,7 @@ them:
 
 ```php
 add_filter(
-	'agent_ready_content_additional_resources_blocks',
+	'content_for_agents_additional_resources_blocks',
 	static function ( array $blocks ): array {
 		$blocks[] = array(
 			'id'    => 'help',
@@ -160,7 +160,7 @@ add_filter(
 );
 
 add_filter(
-	'agent_ready_content_settings_defaults',
+	'content_for_agents_settings_defaults',
 	static function ( array $defaults ): array {
 		$defaults['site_summary'] = 'A concise description of this site.';
 		return $defaults;
@@ -180,15 +180,15 @@ registered:
 add_action(
 	'init',
 	static function (): void {
-		add_post_type_support( 'book', 'agent-ready-content' );
+		add_post_type_support( 'book', 'content-for-agents' );
 	},
 	20
 );
 ```
 
 An integration that owns the post type can instead include
-`agent-ready-content` in its `register_post_type()` `supports` array. Declare
-the separate `agent-ready-content-llms-txt` support when changes to that post
+`content-for-agents` in its `register_post_type()` `supports` array. Declare
+the separate `content-for-agents-llms-txt` support when changes to that post
 type affect content the integration contributes to the index. Provider-specific
 data, queries, and dependencies remain outside the base plugin.
 
@@ -197,8 +197,8 @@ data, queries, and dependencies remain outside the base plugin.
 When related data changes, integrations identify the affected article IDs and call:
 
 ```php
-\Agent_Ready_Content\Markdown_Cache_Invalidator::invalidate_post( $article_id );
-\Agent_Ready_Content\Llms_Txt_Cache_Invalidator::purge_cache();
+\Content_For_Agents\Markdown_Cache_Invalidator::invalidate_post( $article_id );
+\Content_For_Agents\Llms_Txt_Cache_Invalidator::purge_cache();
 ```
 
 The first call clears the article and its parent, including supported page-cache

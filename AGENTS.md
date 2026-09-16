@@ -1,16 +1,16 @@
-# Agent Ready Content contributor guide
+# Content for Agents contributor guide
 
 ## Project purpose
 
-Agent Ready Content is a WordPress VIP plugin that publishes posts and pages as Markdown and provides `/llms.txt` discovery. It is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
+Content for Agents is a WordPress VIP plugin that publishes posts and pages as Markdown and provides `/llms.txt` discovery. It is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
 
 The supported runtime is WordPress 6.8 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required only to develop and build the settings interface.
 
 ## Repository layout
 
-- `agent-ready-content.php` is the plugin entry point.
+- `content-for-agents.php` is the plugin entry point.
 - The entry point maps top-level plugin classes to files in `includes/`.
-- `includes/` contains the PHP implementation in the `Agent_Ready_Content` namespace.
+- `includes/` contains the PHP implementation in the `Content_For_Agents` namespace.
 - `src/settings/` contains the TypeScript settings application.
 - `build/settings/` contains generated production assets loaded by WordPress.
 - `README.md` provides the project overview; `docs/PLUGIN-GUIDE.md` documents behavior and public extension contracts.
@@ -49,13 +49,13 @@ CI verifies that the required production assets can be generated from source.
 
 - Do not commit `build/`. Change `src/settings/` and run `npm run build`; release packaging must generate and include the resulting assets.
 - Do not commit `vendor/`. Composer installs development-only coding-standard tools, and the deployed plugin does not load Composer's autoloader.
-- Keep the autoloader limited to direct classes in `Agent_Ready_Content`. Nested namespaces belong to integration plugins with their own loaders.
+- Keep the autoloader limited to direct classes in `Content_For_Agents`. Nested namespaces belong to integration plugins with their own loaders.
 - Do not commit `node_modules/`.
 - Keep runtime WordPress packages externalized. WordPress provides them through the dependencies listed in `build/settings/index.asset.php`.
 
 ## Implementation constraints
 
-- Keep public PHP classes in the `Agent_Ready_Content` namespace and public identifiers under `agent_ready_content` or `agent-ready-content`.
+- Keep public PHP classes in the `Content_For_Agents` namespace and public identifiers under `content_for_agents` or `content-for-agents`.
 - Preserve the extension contracts documented in `docs/PLUGIN-GUIDE.md`. Treat changes to hooks, option names, REST routes, metadata, cache groups, and callback precedence as breaking changes.
 - Do not add legacy PRC aliases, settings migration, provider-specific logic, or integration-framework packaging unless the task explicitly covers that work.
 - The plugin requires VIP URL lookup, cache purge, and Cron Control APIs. Do not add silent non-VIP fallbacks that alter production behavior.

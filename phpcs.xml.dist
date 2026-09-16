@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
-<ruleset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="agent-ready-content" xsi:noNamespaceSchemaLocation="vendor/squizlabs/php_codesniffer/phpcs.xsd">
-	<description>WordPress VIP coding standards for Agent Ready Content.</description>
+<ruleset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="content-for-agents" xsi:noNamespaceSchemaLocation="vendor/squizlabs/php_codesniffer/phpcs.xsd">
+	<description>WordPress VIP coding standards for Content for Agents.</description>
 
 	<file>.</file>
 	<exclude-pattern>/build/</exclude-pattern>
@@ -52,9 +52,9 @@
 		<exclude-pattern>tests/**/bootstrap.php</exclude-pattern>
 		<properties>
 			<property name="prefixes" type="array">
-				<element value="agent_ready_content"/>
-				<element value="AGENT_READY_CONTENT"/>
-				<element value="Agent_Ready_Content"/>
+				<element value="content_for_agents"/>
+				<element value="CONTENT_FOR_AGENTS"/>
+				<element value="Content_For_Agents"/>
 			</property>
 		</properties>
 	</rule>
@@ -70,7 +70,7 @@
 	<rule ref="WordPress.WP.I18n">
 		<properties>
 			<property name="text_domain" type="array">
-				<element value="agent-ready-content"/>
+				<element value="content-for-agents"/>
 			</property>
 		</properties>
 	</rule>

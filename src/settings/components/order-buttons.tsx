@@ -25,11 +25,11 @@ export default function OrderButtons< T >( {
 				onClick={ () => move( -1 ) }
 				aria-label={ sprintf(
 					/* translators: %s: Item title. */
-					__( 'Move %s up', 'agent-ready-content' ),
+					__( 'Move %s up', 'content-for-agents' ),
 					label
 				) }
 			>
-				{ __( 'Move up', 'agent-ready-content' ) }
+				{ __( 'Move up', 'content-for-agents' ) }
 			</Button>
 			<Button
 				variant="secondary"
@@ -37,11 +37,11 @@ export default function OrderButtons< T >( {
 				onClick={ () => move( 1 ) }
 				aria-label={ sprintf(
 					/* translators: %s: Item title. */
-					__( 'Move %s down', 'agent-ready-content' ),
+					__( 'Move %s down', 'content-for-agents' ),
 					label
 				) }
 			>
-				{ __( 'Move down', 'agent-ready-content' ) }
+				{ __( 'Move down', 'content-for-agents' ) }
 			</Button>
 			<Button
 				variant="tertiary"
@@ -49,11 +49,11 @@ export default function OrderButtons< T >( {
 				onClick={ () => onChange( items.filter( ( _, i ) => i !== index ) ) }
 				aria-label={ sprintf(
 					/* translators: %s: Item title. */
-					__( 'Remove %s', 'agent-ready-content' ),
+					__( 'Remove %s', 'content-for-agents' ),
 					label
 				) }
 			>
-				{ __( 'Remove', 'agent-ready-content' ) }
+				{ __( 'Remove', 'content-for-agents' ) }
 			</Button>
 		</div>
 	);

@@ -22,8 +22,8 @@ jobs:
       - name: Check for version change
         id: version_check
         run: |
-          OLD_VERSION=$(git show HEAD^:agent-ready-content.php 2>/dev/null | sed -n 's/.*Version: *//p' | head -n1 | tr -d '[:space:]')
-          NEW_VERSION=$(git show HEAD:agent-ready-content.php | sed -n 's/.*Version: *//p' | head -n1 | tr -d '[:space:]')
+          OLD_VERSION=$(git show HEAD^:content-for-agents.php 2>/dev/null | sed -n 's/.*Version: *//p' | head -n1 | tr -d '[:space:]')
+          NEW_VERSION=$(git show HEAD:content-for-agents.php | sed -n 's/.*Version: *//p' | head -n1 | tr -d '[:space:]')
           if [ -z "$OLD_VERSION" ] || [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
             echo "No version change detected"
             exit 0
@@ -47,5 +47,5 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ steps.version_check.outputs.new_version }}
-          files: agent-ready-content.zip
+          files: content-for-agents.zip
           generate_release_notes: true

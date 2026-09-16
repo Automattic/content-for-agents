@@ -19,17 +19,17 @@ export default function Categories( {
 		: state.draft.category_ids;
 	return (
 		<Section
-			title={ __( 'Categories', 'agent-ready-content' ) }
+			title={ __( 'Categories', 'content-for-agents' ) }
 			state={ state }
 			description={
 				automatic
 					? __(
 							'Automatic: includes top-level categories with published posts.',
-							'agent-ready-content'
+							'content-for-agents'
 					  )
 					: __(
 							'Custom selection: includes the selected top-level categories.',
-							'agent-ready-content'
+							'content-for-agents'
 					  )
 			}
 		>
@@ -52,14 +52,14 @@ export default function Categories( {
 				/>
 			) ) }
 			{ ! categories.length && (
-				<p>{ __( 'No top-level categories found.', 'agent-ready-content' ) }</p>
+				<p>{ __( 'No top-level categories found.', 'content-for-agents' ) }</p>
 			) }
 			<Button
 				variant="secondary"
 				disabled={ automatic }
 				onClick={ () => state.setDraft( { category_ids: [] } ) }
 			>
-				{ __( 'Reset to automatic', 'agent-ready-content' ) }
+				{ __( 'Reset to automatic', 'content-for-agents' ) }
 			</Button>
 		</Section>
 	);

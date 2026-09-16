@@ -3,10 +3,10 @@
 /**
  * Content negotiation for Accept: text/markdown.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Handles content negotiation via Accept header.
@@ -14,7 +14,7 @@ namespace Agent_Ready_Content;
  * When a request includes Accept: text/markdown and the response is a singular post/page,
  * serves markdown instead of HTML.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Content_Negotiation {
 
@@ -22,12 +22,12 @@ class Content_Negotiation {
 	 * Constructor.
 	 *
 	 * Registers the template_redirect hook only when
-	 * AGENT_READY_CONTENT_ENABLE_ACCEPT_NEGOTIATION is true.
+	 * CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION is true.
 	 *
 	 * @param Loader $loader The loader instance.
 	 */
 	public function __construct( Loader $loader ) {
-		if ( ! AGENT_READY_CONTENT_ENABLE_ACCEPT_NEGOTIATION ) {
+		if ( ! CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION ) {
 			return;
 		}
 
@@ -53,7 +53,7 @@ class Content_Negotiation {
 			return;
 		}
 
-		if ( ! post_type_supports( $post->post_type, 'agent-ready-content' ) ) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
 			return;
 		}
 

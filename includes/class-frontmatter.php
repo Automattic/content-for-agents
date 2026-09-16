@@ -3,15 +3,15 @@
 /**
  * YAML frontmatter generation for markdown output.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Generates YAML frontmatter with post metadata.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Frontmatter {
 
@@ -38,7 +38,7 @@ class Frontmatter {
 			'tags'        => $this->get_tags( $post ),
 		);
 
-		$data = apply_filters( 'agent_ready_content_frontmatter', $data, $post );
+		$data = apply_filters( 'content_for_agents_frontmatter', $data, $post );
 
 		// Remove empty values.
 		$data = array_filter( $data, fn( $v ) => '' !== $v && array() !== $v && null !== $v );
@@ -89,7 +89,7 @@ class Frontmatter {
 
 		// Filters are expected to return arrays of entries with at minimum a `name`
 		// key, and optionally `job_title` and `link` (e.g. from an author plugin).
-		$bylines = apply_filters( 'agent_ready_content_authors', array(), $post );
+		$bylines = apply_filters( 'content_for_agents_authors', array(), $post );
 		if ( ! empty( $bylines ) ) {
 			foreach ( $bylines as $byline ) {
 				if ( is_string( $byline ) ) {

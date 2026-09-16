@@ -4,15 +4,15 @@
  *
  * Hooks into post lifecycle events to clear cached markdown documents.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Invalidates markdown document cache when posts are saved, trashed, or deleted.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Markdown_Cache_Invalidator {
 
@@ -30,7 +30,7 @@ class Markdown_Cache_Invalidator {
 		$loader->add_action( 'post_updated', $this, 'invalidate_old_parent', 10, 3 );
 		$loader->add_action( 'edited_term', $this, 'invalidate_term_documents', 10, 3 );
 		$loader->add_action( 'profile_update', $this, 'invalidate_author_documents', 10, 2 );
-		$loader->add_action( 'agent_ready_content_purge_related_documents', $this, 'purge_related_documents', 10, 2 );
+		$loader->add_action( 'content_for_agents_purge_related_documents', $this, 'purge_related_documents', 10, 2 );
 	}
 
 	/**
@@ -51,7 +51,7 @@ class Markdown_Cache_Invalidator {
 	 */
 	public function add_vip_purge_urls( array $urls, int $post_id ): array {
 		$post_type = get_post_type( $post_id );
-		if ( ! is_string( $post_type ) || ! post_type_supports( $post_type, 'agent-ready-content' ) ) {
+		if ( ! is_string( $post_type ) || ! post_type_supports( $post_type, 'content-for-agents' ) ) {
 			return $urls;
 		}
 
@@ -99,7 +99,7 @@ class Markdown_Cache_Invalidator {
 
 		$post = get_post( $post_id );
 		if ( ! $post || 'publish' !== $post->post_status
-			|| ! post_type_supports( $post->post_type, 'agent-ready-content' ) ) {
+			|| ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
 			return;
 		}
 
@@ -128,7 +128,7 @@ class Markdown_Cache_Invalidator {
 		}
 
 		$post_type = get_post_type( $post_id );
-		if ( ! post_type_supports( $post_type, 'agent-ready-content' ) ) {
+		if ( ! post_type_supports( $post_type, 'content-for-agents' ) ) {
 			return;
 		}
 
@@ -143,7 +143,7 @@ class Markdown_Cache_Invalidator {
 
 	/** Clear the former parent's navigation when a supported child moves. */
 	public function invalidate_old_parent( int $post_id, \WP_Post $after, \WP_Post $before ): void {
-		if ( post_type_supports( $after->post_type, 'agent-ready-content' )
+		if ( post_type_supports( $after->post_type, 'content-for-agents' )
 			&& $before->post_parent && $before->post_parent !== $after->post_parent ) {
 			self::clear_post_cache( (int) $before->post_parent );
 		}
@@ -193,7 +193,7 @@ class Markdown_Cache_Invalidator {
 			array_filter(
 				get_post_types(),
 				static function ( $type ) {
-					return post_type_supports( $type, 'agent-ready-content' );
+					return post_type_supports( $type, 'content-for-agents' );
 				}
 			)
 		);
@@ -234,8 +234,8 @@ class Markdown_Cache_Invalidator {
 		}
 		if ( 100 === count( $query->posts ) ) {
 			$args = array( $relation, (int) end( $query->posts ) );
-			if ( ! wp_next_scheduled( 'agent_ready_content_purge_related_documents', $args ) ) {
-				$scheduled = wp_schedule_single_event( time(), 'agent_ready_content_purge_related_documents', $args, true );
+			if ( ! wp_next_scheduled( 'content_for_agents_purge_related_documents', $args ) ) {
+				$scheduled = wp_schedule_single_event( time(), 'content_for_agents_purge_related_documents', $args, true );
 				if ( is_wp_error( $scheduled ) && 'duplicate_event' !== $scheduled->get_error_code() ) {
 					wp_trigger_error(
 						__METHOD__,

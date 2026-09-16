@@ -3,21 +3,21 @@
 /**
  * Block Markdown Registry.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Static registry mapping block names to markdown callbacks.
  *
  * Other plugins register their callbacks on the
- * `agent_ready_content_register_block_callbacks` action, which fires
+ * `content_for_agents_register_block_callbacks` action, which fires
  * at init priority 5. Each callback receives the parsed block array and
  * the WP_Post being converted, and returns a markdown string.
  *
  * Example:
- *   add_action( 'agent_ready_content_register_block_callbacks', function() {
+ *   add_action( 'content_for_agents_register_block_callbacks', function() {
  *       Block_Markdown_Registry::register(
  *           'my-plugin/my-block',
  *           function( array $block, \WP_Post $post ): string {
@@ -26,7 +26,7 @@ namespace Agent_Ready_Content;
  *       );
  *   } );
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Block_Markdown_Registry {
 
@@ -41,9 +41,9 @@ class Block_Markdown_Registry {
 	 * Current transformation context slug (e.g. 'email', 'plain-text', 'apple-news').
 	 * Empty string when no transformation is in progress.
 	 *
-	 * Set via do_action( 'agent_ready_content_set_context', $slug ) by the
+	 * Set via do_action( 'content_for_agents_set_context', $slug ) by the
 	 * content transformer pipeline before calling post_to_markdown(), and cleared
-	 * via do_action( 'agent_ready_content_clear_context' ) immediately after.
+	 * via do_action( 'content_for_agents_clear_context' ) immediately after.
 	 *
 	 * @var string
 	 */

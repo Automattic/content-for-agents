@@ -3,22 +3,22 @@
 /**
  * Markdown response output handler.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Serves a post as markdown with frontmatter and headers.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Markdown_Response {
 
 	/**
 	 * Cache group for markdown document output.
 	 */
-	const CACHE_GROUP = 'agent_ready_content_doc';
+	const CACHE_GROUP = 'content_for_agents_doc';
 
 	/**
 	 * Cache TTL (1 hour).
@@ -36,11 +36,11 @@ class Markdown_Response {
 	public static function serve( $post ) {
 		if ( 'publish' !== $post->post_status && ! current_user_can( 'read_post', $post->ID ) ) {
 			nocache_headers();
-			wp_die( esc_html__( 'Content not found.', 'agent-ready-content' ), '', array( 'response' => 404 ) );
+			wp_die( esc_html__( 'Content not found.', 'content-for-agents' ), '', array( 'response' => 404 ) );
 		}
 		if ( post_password_required( $post ) && ! current_user_can( 'edit_post', $post->ID ) ) {
 			nocache_headers();
-			wp_die( esc_html__( 'This content is password protected.', 'agent-ready-content' ), '', array( 'response' => 403 ) );
+			wp_die( esc_html__( 'This content is password protected.', 'content-for-agents' ), '', array( 'response' => 403 ) );
 		}
 
 		// Shared caches must contain only anonymous, public, non-preview output.
@@ -58,7 +58,7 @@ class Markdown_Response {
 			$yaml          = $frontmatter->build( $post, $markdown_body );
 
 			/** This filter is documented in class-markdown-response.php */
-			$markdown_body = apply_filters( 'agent_ready_content_after_markdown', $markdown_body, $post );
+			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
 
 			$content = $yaml . ( $title ? "# $title\n\n" : '' ) . $markdown_body;
 
@@ -121,7 +121,7 @@ class Markdown_Response {
 	 */
 	public static function get_content_signal_header() {
 		$options = get_option(
-			'agent_ready_content_content_signal',
+			'content_for_agents_content_signal',
 			array(
 				'ai-train' => 'yes',
 				'search'   => 'yes',

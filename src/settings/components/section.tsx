@@ -35,7 +35,7 @@ export default function Section( {
 				>
 					{ sprintf(
 						/* translators: %s: Settings section name. */
-						__( 'Save %s', 'agent-ready-content' ),
+						__( 'Save %s', 'content-for-agents' ),
 						title
 					) }
 				</Button>

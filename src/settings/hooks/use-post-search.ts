@@ -54,7 +54,7 @@ export default function usePostSearch( resolved: ResolvedPost[] ) {
 				setMore( page < Number( response.headers.get( 'X-WP-TotalPages' ) || 1 ) );
 			} catch ( failure ) {
 				if ( ! controller.signal.aborted ) {
-					setError( errorMessage( failure, __( 'Search failed.', 'agent-ready-content' ) ) );
+					setError( errorMessage( failure, __( 'Search failed.', 'content-for-agents' ) ) );
 				}
 			} finally {
 				if ( ! controller.signal.aborted ) {

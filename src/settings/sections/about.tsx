@@ -16,20 +16,20 @@ export default function About( { settings, onSaved, saveSettings }: SectionProps
 		saveSettings
 	);
 	return (
-		<Section title={ __( 'Site summary', 'agent-ready-content' ) } state={ state }>
+		<Section title={ __( 'Site summary', 'content-for-agents' ) } state={ state }>
 			<TextareaControl
 				__nextHasNoMarginBottom
-				label={ __( 'Site summary', 'agent-ready-content' ) }
+				label={ __( 'Site summary', 'content-for-agents' ) }
 				help={ __(
 					'Shown below the site name in /llms.txt. Defaults to the WordPress tagline.',
-					'agent-ready-content'
+					'content-for-agents'
 				) }
 				value={ state.draft.site_summary }
 				onChange={ value => state.setDraft( { ...state.draft, site_summary: value } ) }
 			/>
 			<TextareaControl
 				__nextHasNoMarginBottom
-				label={ __( 'About description', 'agent-ready-content' ) }
+				label={ __( 'About description', 'content-for-agents' ) }
 				value={ state.draft.about_description }
 				onChange={ value =>
 					state.setDraft( {

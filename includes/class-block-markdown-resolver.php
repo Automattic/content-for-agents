@@ -2,10 +2,10 @@
 /**
  * Block Markdown Resolver.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 use WP_Block_Type_Registry;
 
@@ -13,10 +13,10 @@ use WP_Block_Type_Registry;
  * Resolves block-level markdown behavior from block metadata.
  *
  * Supported block.json metadata contract:
- * - agentReadyContent.callback: callable string (e.g. Namespace\\Class::method)
- * - agentReadyContent.mode: html-fallback|strip|children-only
+ * - contentForAgents.callback: callable string (e.g. Namespace\\Class::method)
+ * - contentForAgents.mode: html-fallback|strip|children-only
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Block_Markdown_Resolver {
 
@@ -27,7 +27,7 @@ class Block_Markdown_Resolver {
 	 * @return array
 	 */
 	public static function inject_metadata_into_supports( array $metadata ): array {
-		if ( empty( $metadata['agentReadyContent'] ) || ! is_array( $metadata['agentReadyContent'] ) ) {
+		if ( empty( $metadata['contentForAgents'] ) || ! is_array( $metadata['contentForAgents'] ) ) {
 			return $metadata;
 		}
 
@@ -35,7 +35,7 @@ class Block_Markdown_Resolver {
 			$metadata['supports'] = array();
 		}
 
-		$metadata['supports']['agentReadyContent'] = $metadata['agentReadyContent'];
+		$metadata['supports']['contentForAgents'] = $metadata['contentForAgents'];
 
 		return $metadata;
 	}
@@ -52,7 +52,7 @@ class Block_Markdown_Resolver {
 			return null;
 		}
 
-		$config = $block_type->supports['agentReadyContent'] ?? null;
+		$config = $block_type->supports['contentForAgents'] ?? null;
 		if ( ! is_array( $config ) ) {
 			return null;
 		}

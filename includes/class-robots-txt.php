@@ -10,15 +10,15 @@
  *
  * @see https://developers.cloudflare.com/bots/concepts/content-signals/
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Adds a `Content-Signal:` directive to robots.txt.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Robots_Txt {
 

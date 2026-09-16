@@ -3,10 +3,10 @@
 /**
  * Plugin loader.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 // TODO: Consider removing this abstraction once integrations no longer depend
 // on it, and register actions and filters directly with WordPress instead.
@@ -14,7 +14,7 @@ namespace Agent_Ready_Content;
 /**
  * The loader class for managing WordPress hooks.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Loader {
 

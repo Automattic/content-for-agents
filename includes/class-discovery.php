@@ -3,15 +3,15 @@
 /**
  * Discovery tags for markdown alternate in wp_head.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 /**
  * Adds link rel="alternate" type="text/markdown" for agent discovery.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Discovery {
 
@@ -51,7 +51,7 @@ class Discovery {
 			return;
 		}
 
-		if ( ! post_type_supports( $post->post_type, 'agent-ready-content' ) ) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
 			return;
 		}
 

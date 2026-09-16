@@ -25,14 +25,14 @@ export default function useSection< T extends Partial< Settings > >(
 			onSaved( response );
 			setNotice( {
 				status: 'success',
-				message: __( 'Settings saved.', 'agent-ready-content' ),
+				message: __( 'Settings saved.', 'content-for-agents' ),
 			} );
 		} catch ( error ) {
 			setNotice( {
 				status: 'error',
 				message: errorMessage(
 					error,
-					__( 'Unable to save settings. Please try again.', 'agent-ready-content' )
+					__( 'Unable to save settings. Please try again.', 'content-for-agents' )
 				),
 			} );
 		} finally {

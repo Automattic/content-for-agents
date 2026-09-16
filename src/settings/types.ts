@@ -49,7 +49,7 @@ export interface SaveState {
 }
 declare global {
 	interface Window {
-		agentReadyContentSettings: {
+		contentForAgentsSettings: {
 			llmsTxtUrl: string;
 			restUrl: string;
 			nonce: string;

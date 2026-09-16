@@ -21,17 +21,17 @@ export default function Featured( {
 	const ids = state.draft.featured_posts;
 	return (
 		<Section
-			title={ __( 'Featured posts', 'agent-ready-content' ) }
+			title={ __( 'Featured posts', 'content-for-agents' ) }
 			state={ state }
 			description={ __(
 				'Select public posts and arrange their order. With no selection, recent posts are shown. Password-protected posts are excluded.',
-				'agent-ready-content'
+				'content-for-agents'
 			) }
 		>
 			<TextControl
 				__nextHasNoMarginBottom
 				__next40pxDefaultSize
-				label={ __( 'Search published posts', 'agent-ready-content' ) }
+				label={ __( 'Search published posts', 'content-for-agents' ) }
 				value={ query }
 				onChange={ value => {
 					setQuery( value );
@@ -48,7 +48,7 @@ export default function Featured( {
 					</Notice>
 				) }
 				{ query.trim() && ! loading && ! error && ! results.length && (
-					<p>{ __( 'No posts found.', 'agent-ready-content' ) }</p>
+					<p>{ __( 'No posts found.', 'content-for-agents' ) }</p>
 				) }
 			</div>
 			<ul className="arc-search-results">
@@ -64,7 +64,7 @@ export default function Featured( {
 								setQuery( '' );
 							} }
 						>
-							{ post.title || __( 'Untitled post', 'agent-ready-content' ) }
+							{ post.title || __( 'Untitled post', 'content-for-agents' ) }
 						</Button>
 						<p>{ post.excerpt }</p>
 					</li>
@@ -72,7 +72,7 @@ export default function Featured( {
 			</ul>
 			{ query.trim() && more && ! error && (
 				<Button variant="secondary" disabled={ loading } onClick={ () => setPage( page + 1 ) }>
-					{ __( 'More results', 'agent-ready-content' ) }
+					{ __( 'More results', 'content-for-agents' ) }
 				</Button>
 			) }
 			<ol className="arc-list">
@@ -81,7 +81,7 @@ export default function Featured( {
 						records[ id ]?.title ||
 							sprintf(
 								/* translators: %d: Post ID. */
-								__( 'Post %d (unavailable)', 'agent-ready-content' ),
+								__( 'Post %d (unavailable)', 'content-for-agents' ),
 								id
 							)
 					);

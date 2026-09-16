@@ -41,7 +41,7 @@ export default function useSettings() {
 			.catch( ( failure: unknown ) => {
 				if ( ! controller.signal.aborted ) {
 					setError(
-						errorMessage( failure, __( 'Unable to load settings.', 'agent-ready-content' ) )
+						errorMessage( failure, __( 'Unable to load settings.', 'content-for-agents' ) )
 					);
 				}
 			} );

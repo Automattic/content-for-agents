@@ -2,12 +2,12 @@
 /**
  * Cache invalidation for /llms.txt rendered body.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 
 declare( strict_types=1 );
 
-namespace Agent_Ready_Content;
+namespace Content_For_Agents;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Busts object cache and VIP edge cache for /llms.txt on relevant content changes.
  *
- * @package Agent_Ready_Content
+ * @package Content_For_Agents
  */
 class Llms_Txt_Cache_Invalidator {
 
@@ -60,7 +60,7 @@ class Llms_Txt_Cache_Invalidator {
 		}
 
 		$post_type = get_post_type( $post_id );
-		if ( ! is_string( $post_type ) || ! post_type_supports( $post_type, 'agent-ready-content-llms-txt' ) ) {
+		if ( ! is_string( $post_type ) || ! post_type_supports( $post_type, 'content-for-agents-llms-txt' ) ) {
 			return;
 		}
 
@@ -75,7 +75,7 @@ class Llms_Txt_Cache_Invalidator {
 	 */
 	public function invalidate( int $post_id, ?\WP_Post $post = null ): void {
 		$post_type = ( $post instanceof \WP_Post ) ? $post->post_type : get_post_type( $post_id );
-		if ( ! is_string( $post_type ) || ! post_type_supports( $post_type, 'agent-ready-content-llms-txt' ) ) {
+		if ( ! is_string( $post_type ) || ! post_type_supports( $post_type, 'content-for-agents-llms-txt' ) ) {
 			return;
 		}
 
@@ -88,7 +88,7 @@ class Llms_Txt_Cache_Invalidator {
 	 * @param string $option Option name.
 	 */
 	public function maybe_invalidate_option( string $option ): void {
-		if ( in_array( $option, array( Settings::OPTION_KEY, 'agent_ready_content_content_signal', 'blogname', 'blogdescription' ), true ) ) {
+		if ( in_array( $option, array( Settings::OPTION_KEY, 'content_for_agents_content_signal', 'blogname', 'blogdescription' ), true ) ) {
 			self::purge_cache();
 		}
 	}

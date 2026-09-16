@@ -1,5 +1,5 @@
 {
-  "name": "automattic/agent-ready-content",
+  "name": "automattic/content-for-agents",
   "description": "Markdown publishing and agent discovery for WordPress VIP.",
   "type": "wordpress-plugin",
   "license": "GPL-2.0-or-later",
