@@ -45,7 +45,7 @@ export default function App() {
 		);
 	}
 	return (
-		<div className="arc-settings">
+		<div className="content-for-agents-settings">
 			<h1>{ __( 'Content for Agents', 'content-for-agents' ) }</h1>
 			<p>
 				{ __( 'Choose what appears in your site’s agent discovery index.', 'content-for-agents' ) }{ ' ' }

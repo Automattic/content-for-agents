@@ -51,7 +51,7 @@ export default function Featured( {
 					<p>{ __( 'No posts found.', 'content-for-agents' ) }</p>
 				) }
 			</div>
-			<ul className="arc-search-results">
+			<ul className="content-for-agents-search-results">
 				{ results.map( post => (
 					<li key={ post.id }>
 						<Button
@@ -75,7 +75,7 @@ export default function Featured( {
 					{ __( 'More results', 'content-for-agents' ) }
 				</Button>
 			) }
-			<ol className="arc-list">
+			<ol className="content-for-agents-list">
 				{ ids.map( ( id, index ) => {
 					const label = decodeEntities(
 						records[ id ]?.title ||

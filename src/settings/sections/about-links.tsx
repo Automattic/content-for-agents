@@ -20,7 +20,7 @@ export default function AboutLinks( { settings, onSaved, saveSettings }: Section
 			state={ state }
 			description={ __( 'Add ordered links to useful pages on your site.', 'content-for-agents' ) }
 		>
-			<ol className="arc-list">
+			<ol className="content-for-agents-list">
 				{ items.map( ( item, index ) => (
 					<li key={ item.id }>
 						<TextControl

@@ -28,7 +28,7 @@ export default function Resources( { settings, onSaved, saveSettings }: SectionP
 				'content-for-agents'
 			) }
 		>
-			<ol className="arc-list">
+			<ol className="content-for-agents-list">
 				{ items.map( ( item, index ) => (
 					<li key={ item.id }>
 						<TextControl

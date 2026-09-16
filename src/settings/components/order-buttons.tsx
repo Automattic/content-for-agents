@@ -18,7 +18,7 @@ export default function OrderButtons< T >( {
 		onChange( next );
 	};
 	return (
-		<div className="arc-actions">
+		<div className="content-for-agents-actions">
 			<Button
 				variant="secondary"
 				disabled={ index === 0 }
