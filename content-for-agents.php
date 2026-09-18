@@ -33,12 +33,6 @@ define( 'CONTENT_FOR_AGENTS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CONTENT_FOR_AGENTS_URL', plugin_dir_url( __FILE__ ) );
 define( 'CONTENT_FOR_AGENTS_VERSION', '0.4.0' );
 
-// Dedicated Markdown URLs are safe by default. Enable header negotiation only
-// after confirming that the site's page cache separates HTML and Markdown.
-if ( ! defined( 'CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION' ) ) {
-	define( 'CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION', false );
-}
-
 // Autoload top-level plugin classes using WordPress filename conventions.
 spl_autoload_register(
 	static function ( string $requested_class ): void {
