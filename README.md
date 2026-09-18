@@ -4,17 +4,18 @@
 
 # Content for Agents
 
-Content for Agents is a WordPress VIP plugin that publishes posts and pages as
-Markdown and provides `/llms.txt` discovery. It requires WordPress 6.8 or newer,
-PHP 8.2 or newer, and the WordPress VIP platform runtime.
+Content for Agents is a WordPress VIP plugin that publishes supported content at
+`/markdown` paths and provides `/llms.txt` discovery. It requires WordPress 6.8
+or newer, PHP 8.2 or newer, the WordPress VIP platform runtime, and a non-plain
+permalink structure for individual Markdown documents.
 
 The plugin is derived from **PRC Markdown for Agents by Pew Research Center**.
 See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
 
 ## Features
 
-- Serves posts and pages through `.md`, `/markdown`, and `?markdown=true`
-  URLs, with YAML frontmatter.
+- Serves posts and pages through `{permalink}/markdown` URLs, with an optional
+  trailing slash and YAML frontmatter.
 - Converts Block Editor content, nested blocks, and Classic Editor HTML to
   readable Markdown.
 - Publishes a configurable `/llms.txt` index and advertises Markdown and the
@@ -40,6 +41,13 @@ wpcom_vip_load_plugin( 'content-for-agents' );
 Load integration plugins after Content for Agents. Each integration owns and
 loads its individual dependencies; the base plugin does not require an
 integration framework or provider-specific packages.
+
+Individual Markdown documents do not support WordPress's plain `?p=123`
+permalink structure. Select any non-plain structure under **Settings →
+Permalinks** before relying on individual Markdown documents. The plugin's
+settings screen displays a warning while plain permalinks are active. In that
+mode, the plugin does not advertise or index unsupported individual Markdown
+URLs.
 
 If you are working from a source checkout, follow the build instructions in the
 [contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).

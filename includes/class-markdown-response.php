@@ -78,6 +78,8 @@ class Markdown_Response {
 			header( 'Cache-Control: private, no-store, max-age=0' );
 		}
 
+		// This is the complete non-HTML response. Stop the WordPress request after
+		// writing it so template rendering and later hooks cannot append output.
 		echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		exit;
 	}
@@ -101,7 +103,6 @@ class Markdown_Response {
 		$ttl           = $cache_ttl > 0 ? $cache_ttl : self::CACHE_TTL;
 
 		header( 'Content-Type: text/markdown; charset=utf-8' );
-		header( 'Vary: Accept' );
 		header( 'X-Robots-Tag: noindex' );
 		header( 'X-Markdown-Tokens: ' . $token_count );
 		header( 'Cache-Control: public, max-age=' . $ttl );

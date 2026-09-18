@@ -52,7 +52,7 @@ The plugin deliberately uses a small, direct bootstrap:
 content-for-agents.php
   -> plugins_loaded: Bootstrap creates and registers the modules
   -> init: supported post types and block callbacks are registered
-  -> parse_request/template_redirect: Markdown and /llms.txt requests are handled
+  -> parse_request: /markdown and /llms.txt requests are handled
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
@@ -64,8 +64,7 @@ The main responsibilities are divided as follows:
 | Area                            | Primary classes                                                                                          |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Plugin initialization and hooks | `Bootstrap`, `Loader`                                                                                    |
-| Dedicated Markdown URLs         | `Rewrite_Rules`, `Markdown_Response`                                                                     |
-| Optional `Accept` negotiation   | `Content_Negotiation`                                                                                    |
+| Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                                                 |
 | Block and HTML conversion       | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`, `Html_To_Markdown_Converter` |
 | Document metadata               | `Frontmatter`                                                                                            |
 | Discovery                       | `Discovery`, `Robots_Txt`, `LLMs_Txt`                                                                    |
@@ -74,8 +73,17 @@ The main responsibilities are divided as follows:
 
 Public PHP classes are direct members of the `Content_For_Agents` namespace.
 Integration plugins use their own namespaces and autoloaders. Preserve the
-extension contracts in the README when changing hooks, identifiers, callback
-precedence, REST routes, options, metadata, or cache behavior.
+extension contracts in the plugin guide when changing hooks, identifiers,
+callback precedence, REST routes, options, metadata, or cache behavior.
+
+The two public endpoints are handled directly during `parse_request`.
+`/markdown` uses WordPress's normalized request path; `/llms.txt` compares URL
+paths so it continues to work when plain permalinks leave the normalized request
+empty. Do not replace this with stored rewrite rules or an activation hook. VIP
+application-loaded plugins are not guaranteed to run activation hooks when
+deployed. Individual `/markdown` URLs require non-plain permalinks; plain
+`?p=123` permalinks must remain unsupported unless a deliberate public contract
+change introduces another retrieval form.
 
 ## Choose the right test layer
 

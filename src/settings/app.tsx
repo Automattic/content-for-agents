@@ -51,6 +51,20 @@ export default function App() {
 				{ __( 'Choose what appears in your site’s agent discovery index.', 'content-for-agents' ) }{ ' ' }
 				<a href={ config.llmsTxtUrl }>{ __( 'View /llms.txt', 'content-for-agents' ) }</a>
 			</p>
+			{ ! config.prettyPermalinksEnabled && (
+				<Notice status="warning" isDismissible={ false }>
+					{ __(
+						'Content for Agents is partially active. /llms.txt remains available, but individual Markdown documents cannot be published while WordPress uses plain permalinks.',
+						'content-for-agents'
+					) }{ ' ' }
+					<a href={ config.permalinkSettingsUrl }>
+						{ __(
+							'Choose a non-plain permalink structure to enable individual Markdown documents.',
+							'content-for-agents'
+						) }
+					</a>
+				</Notice>
+			) }
 			{ content }
 		</div>
 	);

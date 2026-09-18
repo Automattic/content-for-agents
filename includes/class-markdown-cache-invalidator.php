@@ -59,28 +59,20 @@ class Markdown_Cache_Invalidator {
 	}
 
 	/**
-	 * Build URL paths to purge; VIP also purges all query-string variants.
+	 * Build Markdown endpoint URLs to purge.
 	 *
 	 * @param int $post_id Post ID.
 	 * @return string[]
 	 */
 	private static function get_purge_urls( int $post_id ): array {
-		$permalink = get_permalink( $post_id );
-		if ( ! is_string( $permalink ) || '' === $permalink ) {
+		$endpoint_url = Markdown_Endpoint::get_url( $post_id );
+		if ( '' === $endpoint_url ) {
 			return array();
 		}
 
-		if ( wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
-			return array( $permalink, add_query_arg( 'markdown', 'true', $permalink ) );
-		}
-
-		$endpoint_base = untrailingslashit( $permalink );
-
 		return array(
-			$permalink,
-			$endpoint_base . '.md',
-			$endpoint_base . '/markdown',
-			$endpoint_base . '/markdown/',
+			$endpoint_url,
+			$endpoint_url . '/',
 		);
 	}
 

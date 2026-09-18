@@ -6,36 +6,40 @@ setup and checks, see the [contributor guide](https://github.com/Automattic/cont
 
 ## Content and discovery
 
-For a published post at `/example/`, the following return the same Markdown:
-
-- `/example.md`
-- `/example/markdown` (also accepts a trailing slash)
-- `/example/?markdown=true`
-
-Sites using plain permalinks advertise the query-string form instead. Private
-content requires permission to read it. Password-protected content requires
-the password or edit permission and is excluded from the public featured index.
+For a published post at `/example/`, Markdown is available from
+`/example/markdown` and `/example/markdown/`. The endpoint requires pretty
+permalinks. WordPress's plain `?p=123` permalink structure is unsupported for
+individual Markdown documents because it cannot represent the `/markdown`
+path. In plain-permalink mode, the plugin does not advertise those documents or
+include their unsupported Markdown URLs in `/llms.txt`, and the settings screen
+displays a warning with a link to permalink settings. Private content requires
+permission to read it.
+Password-protected content requires the password or edit permission and is
+excluded from the public featured index.
 Authenticated, preview, and password-authorized documents are not stored in the
 shared Markdown cache.
 
-Output includes YAML metadata, the title, and converted content. HTML pages
-advertise alternate Markdown links and `/llms.txt`. The plugin preserves modern,
-nested, and legacy quotes, citations, lists, tables, links, images, and code.
+Output includes YAML metadata, the title, and converted content. Published
+singular HTML pages advertise their alternate Markdown URL when supported. The
+front page advertises `/llms.txt`. The plugin preserves modern, nested, and
+legacy quotes, citations, lists, tables, links, images, and code.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
 Classic Editor and other freeform post HTML use the same HTML conversion path,
 so the plugin does not require the Block Editor to be enabled.
 
-`Accept: text/markdown` negotiation is disabled by default. Enable
-`CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION` only after verifying that the
-site's cache separates negotiated Markdown from HTML. Discovery and dedicated
-URLs do not require it. The existing Content-Signal defaults are retained and
-can be configured with the `content_for_agents_content_signal` option.
+Markdown and `/llms.txt` responses include a `Content-Signal` header. Its
+`ai-train`, `search`, and `ai-input` values default to `yes` and can be
+configured with the `content_for_agents_content_signal` option.
 
-The plugin uses VIP URL lookup and edge-purge APIs when available, with core
-fallbacks for local development. `/llms.txt` is handled during `parse_request`,
-without stored rewrite rules or a helper file. WordPress's `robots_txt` filter
+The plugin handles `/markdown` and `/llms.txt` directly during `parse_request`.
+The Markdown endpoint reads WordPress's normalized request path. `/llms.txt`
+compares the requested URL path with its home URL so it also works when plain
+permalinks leave the normalized request empty. This avoids activation-time
+rewrite-rule flushes, which are not reliable for VIP application-loaded
+plugins. Markdown paths use VIP's cached URL lookup in production, with a
+WordPress core fallback for local development. WordPress's `robots_txt` filter
 adds discovery where the platform permits it; VIP test-domain crawler
 restrictions still apply. Actual edge-cache refresh requires deployment
 verification.
@@ -225,5 +229,5 @@ integration-maintained output; use the defaults filter for editable starter text
 
 Content-Signal accepts `yes`/`no`, `true`/`false`, booleans, and `1`/`0` for
 `ai-train`, `search`, and `ai-input`. Unknown keys and values are omitted. The
-original all-yes defaults remain in place. Legacy settings migration and filter
+default is `yes` for all three signals. Legacy settings migration and filter
 translation remain outside this base plugin.
