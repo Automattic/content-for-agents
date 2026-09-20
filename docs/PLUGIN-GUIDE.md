@@ -12,12 +12,14 @@ permalinks. WordPress's plain `?p=123` permalink structure is unsupported for
 individual Markdown documents because it cannot represent the `/markdown`
 path. In plain-permalink mode, the plugin does not advertise those documents or
 include their unsupported Markdown URLs in `/llms.txt`, and the settings screen
-displays a warning with a link to permalink settings. Private content requires
-permission to read it.
+displays a warning with a link to permalink settings. The static front page
+does not receive a root `/markdown` endpoint, leaving that path available for a
+normal WordPress page. Private content requires permission to read it.
 Password-protected content requires the password or edit permission and is
 excluded from the public featured index.
-Authenticated, preview, and password-authorized documents are not stored in the
-shared Markdown cache.
+Authenticated and password-authorized documents are not stored in the shared
+Markdown cache. Drafts can be converted through the PHP conversion API, but
+draft and preview URLs are not served by the public `/markdown` endpoint.
 
 Output includes YAML metadata, the title, and converted content. Published
 singular HTML pages advertise their alternate Markdown URL when supported. The

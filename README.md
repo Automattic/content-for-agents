@@ -22,9 +22,9 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
   index through HTML discovery links.
 - Provides settings for the site summary, About links, categories, featured
   posts, and additional resources.
-- Uses WordPress VIP cache invalidation and keeps authenticated, preview, and
+- Uses WordPress VIP cache invalidation and keeps authenticated and
   password-authorized responses out of shared caches while enforcing access to
-  published, private, preview, and password-protected content.
+  published, private, and password-protected content.
 - Exposes a public block callback registry and provider-neutral filters for
   integrations.
 
@@ -48,6 +48,11 @@ Permalinks** before relying on individual Markdown documents. The plugin's
 settings screen displays a warning while plain permalinks are active. In that
 mode, the plugin does not advertise or index unsupported individual Markdown
 URLs.
+
+The static front page does not have an individual Markdown URL. The root
+`/markdown` path remains available for WordPress to use as a normal page URL.
+Draft conversion is available through the PHP conversion API, but drafts and
+preview URLs are not served by the public `/markdown` endpoint.
 
 If you are working from a source checkout, follow the build instructions in the
 [contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).

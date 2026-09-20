@@ -39,16 +39,9 @@ class Markdown_Endpoint {
 			return;
 		}
 
-		if ( '' === $post_path ) {
-			if ( 'page' !== get_option( 'show_on_front' ) ) {
-				return;
-			}
-			$post_id = (int) get_option( 'page_on_front' );
-		} else {
-			$post_id = $this->url_to_post_id( home_url( '/' . $post_path . '/' ) );
-			if ( ! $post_id ) {
-				$post_id = $this->url_to_post_id( home_url( '/' . $post_path ) );
-			}
+		$post_id = $this->url_to_post_id( home_url( '/' . $post_path . '/' ) );
+		if ( ! $post_id ) {
+			$post_id = $this->url_to_post_id( home_url( '/' . $post_path ) );
 		}
 
 		$post = $post_id ? get_post( $post_id ) : null;
@@ -65,18 +58,11 @@ class Markdown_Endpoint {
 	 * @internal
 	 *
 	 * @param string $path Request path.
-	 * An empty string represents the static front page. Null means the request
-	 * is not a Markdown endpoint.
-	 *
-	 * @return string|null Post path, an empty string for the front page, or null.
+	 * @return string|null Post path, or null when this is not a Markdown endpoint.
 	 */
 	public static function get_post_path( string $path ): ?string {
 		$path   = trim( $path, '/' );
 		$suffix = '/markdown';
-
-		if ( 'markdown' === $path ) {
-			return '';
-		}
 
 		if ( ! str_ends_with( $path, $suffix ) ) {
 			return null;
@@ -96,6 +82,13 @@ class Markdown_Endpoint {
 	 */
 	public static function get_url( $post ): string {
 		if ( '' === (string) get_option( 'permalink_structure', '' ) ) {
+			return '';
+		}
+
+		$post = get_post( $post );
+		if ( ! $post instanceof \WP_Post
+			|| ( 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === $post->ID )
+		) {
 			return '';
 		}
 
@@ -134,15 +127,6 @@ class Markdown_Endpoint {
 			return false;
 		}
 
-		if ( 'publish' === $post->post_status || current_user_can( 'read_post', $post->ID ) ) {
-			return true;
-		}
-
-		if ( empty( $_GET['preview'] ) || ! isset( $_GET['preview_nonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			return false;
-		}
-
-		$nonce = sanitize_text_field( wp_unslash( $_GET['preview_nonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		return (bool) wp_verify_nonce( $nonce, 'post_preview_' . $post->ID );
+		return 'publish' === $post->post_status || current_user_can( 'read_post', $post->ID );
 	}
 }

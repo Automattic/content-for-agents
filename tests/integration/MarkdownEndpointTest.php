@@ -62,7 +62,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 			'dot md removed'               => array( '/example.md', null ),
 			'canonical path'               => array( '/example/', null ),
 			'plain permalink path'         => array( '/', null ),
-			'static front page endpoint'   => array( '/markdown', '' ),
+			'root markdown page'           => array( '/markdown', null ),
 		);
 	}
 
@@ -102,6 +102,22 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * A page may use the root Markdown path as its permalink.
+	 */
+	public function test_get_url_preserves_page_with_markdown_slug(): void {
+		$this->configure_permalink_structure( '/%postname%/' );
+		$page_id = self::factory()->post->create(
+			array(
+				'post_name'   => 'markdown',
+				'post_status' => 'publish',
+				'post_type'   => 'page',
+			)
+		);
+
+		$this->assertSame( home_url( '/markdown/markdown' ), Markdown_Endpoint::get_url( $page_id ) );
+	}
+
+	/**
 	 * Plain permalinks safely omit the unsupported endpoint.
 	 */
 	public function test_get_url_returns_empty_string_for_plain_permalinks(): void {
@@ -129,9 +145,9 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * A static front page receives the root Markdown endpoint.
+	 * A static front page does not receive a root Markdown endpoint.
 	 */
-	public function test_get_url_returns_root_markdown_path_for_static_front_page(): void {
+	public function test_get_url_returns_empty_string_for_static_front_page(): void {
 		$this->configure_permalink_structure( '/%postname%/' );
 		$page_id = self::factory()->post->create(
 			array(
@@ -142,7 +158,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		update_option( 'show_on_front', 'page' );
 		update_option( 'page_on_front', $page_id );
 
-		$this->assertSame( home_url( '/markdown' ), Markdown_Endpoint::get_url( $page_id ) );
+		$this->assertSame( '', Markdown_Endpoint::get_url( $page_id ) );
 	}
 
 	/**
