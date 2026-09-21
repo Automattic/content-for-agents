@@ -1,5 +1,5 @@
 /build/
 /node_modules/
 /vendor/
-/tests/fixtures/block-hammer.md
+/tests/fixtures/block-gauntlet.md
 *.php

@@ -432,7 +432,7 @@ HTML;
 	public function test_dynamic_post_blocks_convert_without_executing_shortcodes(): void {
 		$executions = 0;
 		add_shortcode(
-			'block_hammer_shortcode',
+			'block_gauntlet_shortcode',
 			static function () use ( &$executions ): string {
 				++$executions;
 				return '<strong>SENTINEL-SHORTCODE</strong> output.';
@@ -444,16 +444,16 @@ HTML;
 				array(
 					'post_title'   => 'SENTINEL-POST-TITLE',
 					'post_excerpt' => 'SENTINEL-POST-EXCERPT text.',
-					'post_content' => '<!-- wp:post-title /--><!-- wp:post-excerpt /--><!-- wp:shortcode -->[block_hammer_shortcode]<!-- /wp:shortcode -->',
+					'post_content' => '<!-- wp:post-title /--><!-- wp:post-excerpt /--><!-- wp:shortcode -->[block_gauntlet_shortcode]<!-- /wp:shortcode -->',
 					'post_status'  => 'draft',
 				)
 			);
 			$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 		} finally {
-			remove_shortcode( 'block_hammer_shortcode' );
+			remove_shortcode( 'block_gauntlet_shortcode' );
 		}
 
-		$this->assertSame( "## SENTINEL-POST-TITLE\n\nSENTINEL-POST-EXCERPT text.\n\n[block_hammer_shortcode]", $markdown );
+		$this->assertSame( "## SENTINEL-POST-TITLE\n\nSENTINEL-POST-EXCERPT text.\n\n[block_gauntlet_shortcode]", $markdown );
 		$this->assertSame( 0, $executions );
 	}
 
@@ -516,13 +516,13 @@ MARKDOWN
 	/**
 	 * Representative Gutenberg HTML matches the golden Markdown fixture.
 	 */
-	public function test_block_hammer_fixture_matches_golden_markdown(): void {
-		$html     = file_get_contents( __DIR__ . '/../fixtures/block-hammer.html' );
-		$expected = file_get_contents( __DIR__ . '/../fixtures/block-hammer.md' );
+	public function test_block_gauntlet_fixture_matches_golden_markdown(): void {
+		$html     = file_get_contents( __DIR__ . '/../fixtures/block-gauntlet.html' );
+		$expected = file_get_contents( __DIR__ . '/../fixtures/block-gauntlet.md' );
 
 		$this->assertIsString( $html );
 		$this->assertIsString( $expected );
-		$this->assert_block_hammer_types( $html );
+		$this->assert_block_gauntlet_types( $html );
 
 		$post_id  = self::factory()->post->create(
 			array(
@@ -533,7 +533,7 @@ MARKDOWN
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( rtrim( $expected ), $markdown );
-		$this->assert_block_hammer_structure( $markdown );
+		$this->assert_block_gauntlet_structure( $markdown );
 	}
 
 	/**
@@ -543,7 +543,7 @@ MARKDOWN
 	 *
 	 * @param string $html Serialized fixture blocks.
 	 */
-	private function assert_block_hammer_types( string $html ): void {
+	private function assert_block_gauntlet_types( string $html ): void {
 		preg_match_all( '/<!-- wp:([a-z-]+)(?=\s|-->)/', $html, $matches );
 		$actual = array_values( array_unique( $matches[1] ) );
 		sort( $actual );
@@ -589,11 +589,11 @@ MARKDOWN
 	}
 
 	/**
-	 * Asserts structural invariants for the block-hammer fixture.
+	 * Asserts structural invariants for the block-gauntlet fixture.
 	 *
 	 * @param string $markdown Converted fixture Markdown.
 	 */
-	private function assert_block_hammer_structure( string $markdown ): void {
+	private function assert_block_gauntlet_structure( string $markdown ): void {
 		$sentinels = array(
 			'SENTINEL-START',
 			'SENTINEL-INLINE',

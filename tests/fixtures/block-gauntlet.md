@@ -1,4 +1,4 @@
-## SENTINEL-START Block Hammer
+## SENTINEL-START Block Gauntlet
 
 SENTINEL-INLINE has **bold and *nested emphasis with `inline code`***, plus an [example link](https://example.com/docs).
 
