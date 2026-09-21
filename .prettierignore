@@ -1,4 +1,5 @@
 /build/
 /node_modules/
 /vendor/
+/tests/fixtures/block-hammer.md
 *.php
