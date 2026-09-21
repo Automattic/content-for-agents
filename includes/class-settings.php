@@ -282,11 +282,9 @@ class Settings {
 			$handle,
 			'window.contentForAgentsSettings = ' . wp_json_encode(
 				array(
-					'llmsTxtUrl'              => home_url( '/llms.txt' ),
-					'permalinkSettingsUrl'    => admin_url( 'options-permalink.php' ),
-					'prettyPermalinksEnabled' => '' !== (string) get_option( 'permalink_structure', '' ),
-					'restUrl'                 => rest_url(),
-					'nonce'                   => wp_create_nonce( 'wp_rest' ),
+					'llmsTxtUrl' => home_url( '/llms.txt' ),
+					'restUrl'    => rest_url(),
+					'nonce'      => wp_create_nonce( 'wp_rest' ),
 				)
 			) . ';',
 			'before'

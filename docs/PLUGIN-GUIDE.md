@@ -6,20 +6,29 @@ setup and checks, see the [contributor guide](https://github.com/Automattic/cont
 
 ## Content and discovery
 
-For a published post at `/example/`, Markdown is available from
-`/example/markdown` and `/example/markdown/`. The endpoint requires pretty
-permalinks. WordPress's plain `?p=123` permalink structure is unsupported for
-individual Markdown documents because it cannot represent the `/markdown`
-path. In plain-permalink mode, the plugin does not advertise those documents or
-include their unsupported Markdown URLs in `/llms.txt`, and the settings screen
-displays a warning with a link to permalink settings. The static front page
-does not receive a root `/markdown` endpoint, leaving that path available for a
-normal WordPress page. Private content requires permission to read it.
+For a published post at `/example/`, the canonical Markdown URL is
+`/example/markdown`, with an optional trailing slash. With WordPress's plain
+`?p=123` permalink structure, the canonical Markdown URL is
+`?p=123&markdown=true`. Discovery links and `/llms.txt` use the appropriate form
+for the active permalink structure. The static front page does not receive an
+individual Markdown URL, leaving the root `/markdown` path available for a
+normal WordPress page. A `markdown=true` parameter on the static homepage is
+ignored, so WordPress continues with its normal HTML response. The page's former
+slug does not provide a hidden `/markdown` path. Private content requires
+permission to read it.
 Password-protected content requires the password or edit permission and is
 excluded from the public featured index.
 Authenticated and password-authorized documents are not stored in the shared
-Markdown cache. Drafts can be converted through the PHP conversion API, but
-draft and preview URLs are not served by the public `/markdown` endpoint.
+Markdown cache. The `markdown=true` query endpoint works on published singular
+URLs without authentication and is the advertised form under plain permalinks.
+Private and other non-public content is served only when WordPress resolves it
+as singular and the current user has permission to read it. The endpoint accepts
+WordPress preview URLs; WordPress resolves and nonce-validates the preview
+revision before the plugin serves it. WordPress may also resolve a normal
+authenticated `?p=ID` request for a readable draft. The plugin does not perform
+an independent ID fallback for unresolved drafts, pending posts, scheduled
+posts, or custom editorial statuses. Trash, auto-drafts, revisions, and other
+internal statuses are not served.
 
 Output includes YAML metadata, the title, and converted content. Published
 singular HTML pages advertise their alternate Markdown URL when supported. The
@@ -36,7 +45,9 @@ Markdown and `/llms.txt` responses include a `Content-Signal` header. Its
 configured with the `content_for_agents_content_signal` option.
 
 The plugin handles `/markdown` and `/llms.txt` directly during `parse_request`.
-The Markdown endpoint reads WordPress's normalized request path. `/llms.txt`
+The Markdown endpoint reads WordPress's normalized request path. The
+`markdown=true` query endpoint runs during `template_redirect`, after
+WordPress has resolved the post and any preview revision. `/llms.txt`
 compares the requested URL path with its home URL so it also works when plain
 permalinks leave the normalized request empty. This avoids activation-time
 rewrite-rule flushes, which are not reliable for VIP application-loaded
@@ -207,10 +218,11 @@ When related data changes, integrations identify the affected article IDs and ca
 \Content_For_Agents\Llms_Txt_Cache_Invalidator::purge_cache();
 ```
 
-The first call clears the article and its parent, including supported page-cache
-purges. Moving a child also clears its former parent. Category/tag edits and
-author display-name changes clear affected documents, with the first 100 handled
-immediately and further batches scheduled through WordPress for VIP Cron Control.
+The first call clears the article and its parent, including the `/markdown`
+paths and query endpoint in supported page-cache purges. Moving a child also
+clears its former parent. Category/tag edits and author display-name changes
+clear affected documents, with the first 100 handled immediately and further
+batches scheduled through WordPress for VIP Cron Control.
 The 100-document limit bounds each callback's work. VIP queues and deduplicates
 URL purge requests; this does not synchronously purge the edge cache. The second
 call clears `/llms.txt`. Call before permanent deletion if a purge needs the old

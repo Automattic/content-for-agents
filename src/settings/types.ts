@@ -51,8 +51,6 @@ declare global {
 	interface Window {
 		contentForAgentsSettings: {
 			llmsTxtUrl: string;
-			permalinkSettingsUrl: string;
-			prettyPermalinksEnabled: boolean;
 			restUrl: string;
 			nonce: string;
 		};

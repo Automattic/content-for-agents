@@ -65,15 +65,28 @@ class Markdown_Cache_Invalidator {
 	 * @return string[]
 	 */
 	private static function get_purge_urls( int $post_id ): array {
-		$endpoint_url = Markdown_Endpoint::get_url( $post_id );
-		if ( '' === $endpoint_url ) {
-			return array();
+		$endpoint_url = Markdown_Endpoint::get_path_url( $post_id );
+		$query_url    = Markdown_Endpoint::get_query_url( $post_id );
+		$urls         = array();
+
+		if ( '' !== $query_url ) {
+			$permalink = get_permalink( $post_id );
+			if ( is_string( $permalink ) && '' !== $permalink ) {
+				// VIP purges all query-string variants when the base URL is purged.
+				$urls[] = $permalink;
+			}
 		}
 
-		return array(
-			$endpoint_url,
-			$endpoint_url . '/',
-		);
+		if ( '' !== $endpoint_url ) {
+			$urls[] = $endpoint_url;
+			$urls[] = $endpoint_url . '/';
+		}
+
+		if ( '' !== $query_url ) {
+			$urls[] = $query_url;
+		}
+
+		return $urls;
 	}
 
 	/**

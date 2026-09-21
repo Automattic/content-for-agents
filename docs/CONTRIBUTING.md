@@ -53,6 +53,7 @@ content-for-agents.php
   -> plugins_loaded: Bootstrap creates and registers the modules
   -> init: supported post types and block callbacks are registered
   -> parse_request: /markdown and /llms.txt requests are handled
+  -> template_redirect: the markdown=true query endpoint is handled
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
@@ -81,9 +82,11 @@ The two public endpoints are handled directly during `parse_request`.
 paths so it continues to work when plain permalinks leave the normalized request
 empty. Do not replace this with stored rewrite rules or an activation hook. VIP
 application-loaded plugins are not guaranteed to run activation hooks when
-deployed. Individual `/markdown` URLs require non-plain permalinks; plain
-`?p=123` permalinks must remain unsupported unless a deliberate public contract
-change introduces another retrieval form.
+deployed. Individual documents use `/markdown` with pretty permalinks and the
+`markdown=true` query endpoint with plain permalinks. The query
+endpoint runs during `template_redirect` and supports anonymous published
+content plus non-public content that WordPress has resolved as a permitted
+singular request. It does not perform direct post-ID fallback.
 
 ## Choose the right test layer
 
