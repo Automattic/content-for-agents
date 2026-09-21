@@ -47,11 +47,7 @@ class Discovery {
 		}
 
 		global $post;
-		if ( ! $post || 'publish' !== $post->post_status ) {
-			return;
-		}
-
-		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
+		if ( ! $post instanceof \WP_Post || ! Markdown_Access::can_serve( $post, Markdown_Access::CONTEXT_DISCOVERY ) ) {
 			return;
 		}
 
