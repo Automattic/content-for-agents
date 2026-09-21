@@ -142,27 +142,13 @@ class Markdown_Converter {
 			}
 
 			$inner = $block['innerBlocks'] ?? array();
-			if ( ! empty( $inner ) ) {
-				if ( ! $this->descendants_require_zipping( $inner ) ) {
-					$md = $converter->convert( render_block( $block ) );
-					if ( '' !== trim( $md ) ) {
-						$parts[] = $md;
-					}
-					continue;
-				}
-
+			if ( ! empty( $inner ) && $this->descendants_require_zipping( $inner ) ) {
 				if ( 'core/quote' === $block_name ) {
-					$inner_md = $this->blocks_to_markdown( $inner, $post );
-
-					// Child placeholders are absent from innerHTML; remaining text is
-					// the quote's citation. Keep child callbacks and nested quotes intact.
-					$citation = trim( html_entity_decode( wp_strip_all_tags( $block['innerHTML'] ?? '' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
-					if ( '' !== $citation ) {
-						$inner_md = trim( $inner_md ) . "\n\n" . $citation;
-					}
+					$inner_md = $this->zip_inner_content( $block, $post, $converter, true );
 					if ( '' !== trim( $inner_md ) ) {
-						// Prefix blank lines too, so multiple paragraphs form one quote.
+						// Prefix the complete ordered content, including blank lines.
 						$inner_md = '> ' . str_replace( "\n", "\n> ", trim( $inner_md ) );
+						$inner_md = (string) preg_replace( '/^>[ \t]+$/m', '>', $inner_md );
 					}
 					if ( '' !== trim( $inner_md ) ) {
 						$parts[] = $inner_md;
@@ -232,10 +218,11 @@ class Markdown_Converter {
 	 *
 	 * @param array                      $block     Parent block.
 	 * @param \WP_Post                   $post      Post being converted.
-	 * @param HTML_To_Markdown_Converter $converter HTML converter.
+	 * @param HTML_To_Markdown_Converter $converter        HTML converter.
+	 * @param bool                       $quote_fragments  Strip quote/cite wrappers before converting fragments.
 	 * @return string Zipped Markdown.
 	 */
-	private function zip_inner_content( array $block, \WP_Post $post, HTML_To_Markdown_Converter $converter ): string {
+	private function zip_inner_content( array $block, \WP_Post $post, HTML_To_Markdown_Converter $converter, bool $quote_fragments = false ): string {
 		$parts        = array();
 		$inner_blocks = $block['innerBlocks'] ?? array();
 		$inner_index  = 0;
@@ -252,7 +239,12 @@ class Markdown_Converter {
 				continue;
 			}
 
-			$owned_md = $converter->convert( (string) $fragment );
+			$owned_html = (string) $fragment;
+			if ( $quote_fragments ) {
+				$owned_html = (string) preg_replace( '/<!--.*?-->/s', '', $owned_html );
+				$owned_html = (string) preg_replace( '~</?(?:blockquote|cite)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', '', $owned_html );
+			}
+			$owned_md = $converter->convert( $owned_html );
 			if ( '' !== trim( $owned_md ) ) {
 				$parts[] = $owned_md;
 			}

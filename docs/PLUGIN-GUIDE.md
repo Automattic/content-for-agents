@@ -21,11 +21,15 @@ shared Markdown cache.
 Output includes YAML metadata, the title, and converted content. HTML pages
 advertise alternate Markdown links and `/llms.txt`. The plugin preserves modern,
 nested, and legacy quotes, citations, lists, tables, links, images, and code.
+Audio and video sources become Markdown links, with captions retained.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
 Classic Editor and other freeform post HTML use the same HTML conversion path,
 so the plugin does not require the Block Editor to be enabled.
+Core post-title and post-excerpt blocks use the current post context. Direct
+`core/shortcode` blocks remain literal because conversion does not run
+`the_content`; other block render callbacks may still execute code.
 
 `Accept: text/markdown` negotiation is disabled by default. Enable
 `CONTENT_FOR_AGENTS_ENABLE_ACCEPT_NEGOTIATION` only after verifying that the

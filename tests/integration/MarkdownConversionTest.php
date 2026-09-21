@@ -259,7 +259,7 @@ HTML;
 			'content-for-agents/quote-child',
 			static function () use ( &$executions ): string {
 				++$executions;
-				return '**Quoted callback**';
+				return "**Quoted callback**\n  \nSecond quoted line";
 			}
 		);
 
@@ -269,8 +269,63 @@ HTML;
 <!-- /wp:quote -->
 HTML;
 
-		$this->assertSame( "> **Quoted callback**\n> \n> Quote citation", $this->convert_post_content( $content ) );
+		$this->assertSame( "> **Quoted callback**\n>\n> Second quoted line\n>\n> Quote citation", $this->convert_post_content( $content ) );
 		$this->assertSame( 1, $executions );
+	}
+
+	/**
+	 * A custom quote child does not flatten links or emphasis in its citation.
+	 */
+	public function test_quote_with_callback_preserves_formatted_citation(): void {
+		$content = <<<'HTML'
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:content-for-agents/test-block {"text":"Quoted child"} /--><cite title="a > b"><em>Editorial</em> <a href="https://example.com/source">source</a></cite></blockquote>
+<!-- /wp:quote -->
+HTML;
+		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+		$this->assertSame(
+			"> **Quoted child**\n>\n> *Editorial* [source](https://example.com/source)",
+			( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), get_post( $post_id ) )
+		);
+
+		$content = str_replace( ' title="a > b"', '', $content );
+		$this->assertSame(
+			"> **Quoted child**\n>\n> *Editorial* [source](https://example.com/source)",
+			$this->convert_post_content( $content )
+		);
+	}
+
+	/**
+	 * Quote-owned paragraphs retain their order around a custom child and cite.
+	 */
+	public function test_quote_with_callback_preserves_owned_text_around_citation(): void {
+		$content = <<<'HTML'
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><p>Owned <strong>intro</strong>.</p><!-- wp:content-for-agents/test-block {"text":"Quoted child"} /--><p>Owned ending.</p><cite><em>Editorial</em> <a href="https://example.com/source">source</a></cite></blockquote>
+<!-- /wp:quote -->
+HTML;
+
+		$this->assertSame(
+			"> Owned **intro**.\n>\n> **Quoted child**\n>\n> Owned ending.\n>\n> *Editorial* [source](https://example.com/source)",
+			$this->convert_post_content( $content )
+		);
+	}
+
+	/**
+	 * Callback-bearing quotes do not expose script or style bodies.
+	 */
+	public function test_quote_with_callback_omits_owned_script_and_style_content(): void {
+		$content = <<<'HTML'
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:content-for-agents/test-block {"text":"Quoted child"} /--><!-- <cite>HIDDEN COMMENT</cite> --><script>HIDDEN SCRIPT</script><style>HIDDEN STYLE</style><cite>Safe source</cite></blockquote>
+<!-- /wp:quote -->
+HTML;
+		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+
+		$this->assertSame(
+			"> **Quoted child**\n>\n> Safe source",
+			( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), get_post( $post_id ) )
+		);
 	}
 
 	/**
@@ -347,6 +402,62 @@ MARKDOWN
 	}
 
 	/**
+	 * Audio and video URLs survive both direct src and nested source markup.
+	 */
+	public function test_media_elements_preserve_the_first_source_url(): void {
+		$html = <<<'HTML'
+<figure><audio controls src="https://example.com/one.mp3"><source src="https://example.com/ignored.mp3"></audio><figcaption>Audio caption</figcaption></figure>
+<figure><video controls><source src="https://example.com/one.mp4"><source src="https://example.com/ignored.mp4"></video><figcaption>Video caption</figcaption></figure>
+HTML;
+
+		$this->assertSame(
+			"[Audio](https://example.com/one.mp3)\n*Audio caption*\n\n[Video](https://example.com/one.mp4)\n*Video caption*",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * The HTML fallback omits script and style elements with their bodies.
+	 */
+	public function test_html_converter_omits_script_and_style_bodies(): void {
+		$html = '<p>Before.</p><script>HIDDEN SCRIPT</script><style>HIDDEN STYLE</style><p>After.</p>';
+
+		$this->assertSame( "Before.\n\nAfter.", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Context-dependent core blocks resolve against the post being converted,
+	 * without executing shortcodes as the_content would.
+	 */
+	public function test_dynamic_post_blocks_convert_without_executing_shortcodes(): void {
+		$executions = 0;
+		add_shortcode(
+			'block_hammer_shortcode',
+			static function () use ( &$executions ): string {
+				++$executions;
+				return '<strong>SENTINEL-SHORTCODE</strong> output.';
+			}
+		);
+
+		try {
+			$post_id  = self::factory()->post->create(
+				array(
+					'post_title'   => 'SENTINEL-POST-TITLE',
+					'post_excerpt' => 'SENTINEL-POST-EXCERPT text.',
+					'post_content' => '<!-- wp:post-title /--><!-- wp:post-excerpt /--><!-- wp:shortcode -->[block_hammer_shortcode]<!-- /wp:shortcode -->',
+					'post_status'  => 'draft',
+				)
+			);
+			$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
+		} finally {
+			remove_shortcode( 'block_hammer_shortcode' );
+		}
+
+		$this->assertSame( "## SENTINEL-POST-TITLE\n\nSENTINEL-POST-EXCERPT text.\n\n[block_hammer_shortcode]", $markdown );
+		$this->assertSame( 0, $executions );
+	}
+
+	/**
 	 * Cell-internal line and block boundaries do not split Markdown table rows.
 	 */
 	public function test_table_cells_support_line_and_block_boundaries(): void {
@@ -411,6 +522,7 @@ MARKDOWN
 
 		$this->assertIsString( $html );
 		$this->assertIsString( $expected );
+		$this->assert_block_hammer_types( $html );
 
 		$post_id  = self::factory()->post->create(
 			array(
@@ -425,6 +537,58 @@ MARKDOWN
 	}
 
 	/**
+	 * Keep the fixture's audited core-block set explicit. Of WordPress 6.8's
+	 * static blocks, only core/missing is excluded because it is a fallback
+	 * placeholder rather than an authored content block.
+	 *
+	 * @param string $html Serialized fixture blocks.
+	 */
+	private function assert_block_hammer_types( string $html ): void {
+		preg_match_all( '/<!-- wp:([a-z-]+)(?=\s|-->)/', $html, $matches );
+		$actual = array_values( array_unique( $matches[1] ) );
+		sort( $actual );
+
+		$this->assertSame(
+			array(
+				'audio',
+				'button',
+				'buttons',
+				'code',
+				'column',
+				'columns',
+				'cover',
+				'details',
+				'embed',
+				'file',
+				'freeform',
+				'gallery',
+				'group',
+				'heading',
+				'html',
+				'image',
+				'list',
+				'list-item',
+				'media-text',
+				'more',
+				'nextpage',
+				'paragraph',
+				'preformatted',
+				'pullquote',
+				'quote',
+				'separator',
+				'social-link',
+				'social-links',
+				'spacer',
+				'table',
+				'text-columns',
+				'verse',
+				'video',
+			),
+			$actual
+		);
+	}
+
+	/**
 	 * Asserts structural invariants for the block-hammer fixture.
 	 *
 	 * @param string $markdown Converted fixture Markdown.
@@ -434,6 +598,7 @@ MARKDOWN
 			'SENTINEL-START',
 			'SENTINEL-INLINE',
 			'SENTINEL-QUOTE',
+			'SENTINEL-PULLQUOTE',
 			'SENTINEL-CODE',
 			'SENTINEL-GROUP',
 			'SENTINEL-COLUMN-A',
@@ -445,6 +610,24 @@ MARKDOWN
 			'SENTINEL-VERSE',
 			'SENTINEL-GALLERY',
 			'SENTINEL-MEDIA-TEXT',
+			'SENTINEL-COVER',
+			'SENTINEL-FILE',
+			'SENTINEL-AUDIO',
+			'SENTINEL-VIDEO',
+			'SENTINEL-EMBED',
+			'SENTINEL-LIST-ITEM',
+			'SENTINEL-TEXT-COLUMNS',
+			'SENTINEL-FREEFORM',
+			'SENTINEL-SOCIAL',
+			'SENTINEL-CUSTOM-QUOTE',
+			'SENTINEL-CUSTOM-SUMMARY',
+			'SENTINEL-CUSTOM-CHILD-DETAILS',
+			'SENTINEL-MEDIA-CUSTOM-IMAGE',
+			'SENTINEL-MEDIA-CUSTOM-CHILD',
+			'SENTINEL-CUSTOM-COVER',
+			'SENTINEL-CUSTOM-GROUP-BEFORE',
+			'SENTINEL-CUSTOM-GROUP-CHILD',
+			'SENTINEL-CUSTOM-GROUP-AFTER',
 			'SENTINEL-TABLE',
 			'SENTINEL-UNKNOWN',
 			'SENTINEL-END',

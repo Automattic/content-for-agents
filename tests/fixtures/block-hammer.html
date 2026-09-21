@@ -30,6 +30,10 @@
 <blockquote class="wp-block-quote"><p>Quoted SENTINEL-QUOTE text.</p><cite>Quote source</cite></blockquote>
 <!-- /wp:quote -->
 
+<!-- wp:pullquote -->
+<figure class="wp-block-pullquote"><blockquote><p>SENTINEL-PULLQUOTE has <strong>emphasis</strong> and a <a href="https://example.com/source">source link</a>.</p><cite>Pullquote source</cite></blockquote></figure>
+<!-- /wp:pullquote -->
+
 <!-- wp:code -->
 <pre class="wp-block-code"><code>const hammer = "SENTINEL-CODE";
 hammer.use();</code></pre>
@@ -89,6 +93,80 @@ Second verse line.</pre>
 <p>Nested media-text paragraph.</p>
 <!-- /wp:paragraph --></div></div>
 <!-- /wp:media-text -->
+
+<!-- wp:cover {"dimRatio":0} -->
+<div class="wp-block-cover"><div class="wp-block-cover__inner-container"><!-- wp:paragraph -->
+<p>SENTINEL-COVER nested content.</p>
+<!-- /wp:paragraph --></div></div>
+<!-- /wp:cover -->
+
+<!-- wp:file {"href":"https://example.com/guide.pdf"} -->
+<div class="wp-block-file"><a href="https://example.com/guide.pdf">SENTINEL-FILE guide</a><a href="https://example.com/guide.pdf" class="wp-block-file__button wp-element-button" download>Download guide</a></div>
+<!-- /wp:file -->
+
+<!-- wp:audio -->
+<figure class="wp-block-audio"><audio controls src="https://example.com/audio.mp3"></audio><figcaption class="wp-element-caption">SENTINEL-AUDIO recording</figcaption></figure>
+<!-- /wp:audio -->
+
+<!-- wp:video -->
+<figure class="wp-block-video"><video controls src="https://example.com/video.mp4"></video><figcaption class="wp-element-caption">SENTINEL-VIDEO recording</figcaption></figure>
+<!-- /wp:video -->
+
+<!-- wp:embed {"url":"https://example.com/embed","type":"rich","providerNameSlug":"example"} -->
+<figure class="wp-block-embed is-type-rich is-provider-example wp-block-embed-example"><div class="wp-block-embed__wrapper">https://example.com/embed</div><figcaption class="wp-element-caption">SENTINEL-EMBED reference</figcaption></figure>
+<!-- /wp:embed -->
+
+<!-- wp:list -->
+<ul class="wp-block-list"><!-- wp:list-item -->
+<li>SENTINEL-LIST-ITEM first child</li>
+<!-- /wp:list-item --><!-- wp:list-item -->
+<li>Second child</li>
+<!-- /wp:list-item --></ul>
+<!-- /wp:list -->
+
+<!-- wp:text-columns -->
+<div class="wp-block-text-columns"><div class="wp-block-column"><p>SENTINEL-TEXT-COLUMNS first.</p></div><div class="wp-block-column"><p>Second legacy column.</p></div></div>
+<!-- /wp:text-columns -->
+
+<!-- wp:freeform -->
+<p>SENTINEL-FREEFORM classic block with <em>formatting</em>.</p>
+<!-- /wp:freeform -->
+
+<!-- wp:social-links -->
+<ul class="wp-block-social-links"><!-- wp:social-link {"url":"https://example.com/profile","service":"wordpress","label":"SENTINEL-SOCIAL WordPress"} /--></ul>
+<!-- /wp:social-links -->
+
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:content-for-agents/test-block {"text":"SENTINEL-CUSTOM-QUOTE"} /--><cite><em>Custom</em> <a href="https://example.com/custom-source">quote source</a></cite></blockquote>
+<!-- /wp:quote -->
+
+<!-- wp:details -->
+<details class="wp-block-details"><summary>SENTINEL-CUSTOM-SUMMARY</summary><!-- wp:content-for-agents/test-block {"text":"SENTINEL-CUSTOM-CHILD-DETAILS"} /--><!-- wp:paragraph --><p>After the custom details child.</p><!-- /wp:paragraph --></details>
+<!-- /wp:details -->
+
+<!-- wp:media-text {"mediaType":"image","mediaUrl":"https://example.com/custom-media.jpg"} -->
+<div class="wp-block-media-text is-stacked-on-mobile"><figure class="wp-block-media-text__media"><img src="https://example.com/custom-media.jpg" alt="SENTINEL-MEDIA-CUSTOM-IMAGE"></figure><div class="wp-block-media-text__content"><!-- wp:content-for-agents/test-block {"text":"SENTINEL-MEDIA-CUSTOM-CHILD"} /--><!-- wp:paragraph --><p>After the custom media child.</p><!-- /wp:paragraph --></div></div>
+<!-- /wp:media-text -->
+
+<!-- wp:cover {"dimRatio":0} -->
+<div class="wp-block-cover"><div class="wp-block-cover__inner-container"><!-- wp:content-for-agents/test-block {"text":"SENTINEL-CUSTOM-COVER"} /--></div></div>
+<!-- /wp:cover -->
+
+<!-- wp:group -->
+<div class="wp-block-group"><p>SENTINEL-CUSTOM-GROUP-BEFORE</p><!-- wp:content-for-agents/test-block {"text":"SENTINEL-CUSTOM-GROUP-CHILD"} /--><p>SENTINEL-CUSTOM-GROUP-AFTER</p></div>
+<!-- /wp:group -->
+
+<!-- wp:spacer {"height":"40px"} -->
+<div style="height:40px" aria-hidden="true" class="wp-block-spacer"></div>
+<!-- /wp:spacer -->
+
+<!-- wp:more -->
+<!--more-->
+<!-- /wp:more -->
+
+<!-- wp:nextpage -->
+<!--nextpage-->
+<!-- /wp:nextpage -->
 
 <!-- wp:table -->
 <figure class="wp-block-table"><table><thead><tr><th>Feature</th><th>Rendered content</th></tr></thead><tbody><tr><td><h3>Rich cell</h3><p>SENTINEL-TABLE has <strong>bold</strong>, <em>emphasis</em>, <code>code</code>, and literal A | B.</p><ul><li>Cell item</li></ul></td><td><p>Line one<br>Line two with <a href="https://example.com/cell">cell link</a>.</p><figure><img src="https://example.com/cell.jpg" alt="Cell image"><figcaption>Cell caption</figcaption></figure></td></tr><tr><td colspan="2">Span attributes are ignored</td><td><div>Block one</div><div>Block two</div></td></tr></tbody></table></figure>

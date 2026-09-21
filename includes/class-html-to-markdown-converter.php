@@ -130,7 +130,10 @@ final class HTML_To_Markdown_Converter {
 				$is_tag
 				&& $token_name
 				&& ! $processor->is_tag_closer()
-				&& 'true' === strtolower( trim( (string) $processor->get_attribute( 'aria-hidden' ) ) )
+				&& (
+					in_array( $token_name, array( 'SCRIPT', 'STYLE' ), true )
+					|| 'true' === strtolower( trim( (string) $processor->get_attribute( 'aria-hidden' ) ) )
+				)
 			) {
 				if ( $processor instanceof WP_HTML_Processor ) {
 					$this->skip_processor_element( $processor );
@@ -231,6 +234,7 @@ final class HTML_To_Markdown_Converter {
 			'in_pre'           => false,
 			'link_stack'       => array(),
 			'list_stack'       => array(),
+			'media_stack'      => array(),
 		);
 	}
 
@@ -337,6 +341,33 @@ final class HTML_To_Markdown_Converter {
 			if ( '' !== $src ) {
 				$alt = (string) $processor->get_attribute( 'alt' );
 				$this->append_text( $context['output'], '![' . $alt . '](' . $src . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+			}
+			return;
+		}
+
+		if ( 'AUDIO' === $token_name || 'VIDEO' === $token_name ) {
+			if ( $is_closer ) {
+				array_pop( $context['media_stack'] );
+			} else {
+				$src = (string) $processor->get_attribute( 'src' );
+
+				$context['media_stack'][] = array(
+					'type'    => $token_name,
+					'has_src' => '' !== $src,
+				);
+				if ( '' !== $src ) {
+					$this->append_text( $context['output'], '[' . ucfirst( strtolower( $token_name ) ) . '](' . $src . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+				}
+			}
+			return;
+		}
+
+		if ( 'SOURCE' === $token_name && ! $is_closer && ! empty( $context['media_stack'] ) ) {
+			$index = count( $context['media_stack'] ) - 1;
+			$src   = (string) $processor->get_attribute( 'src' );
+			if ( ! $context['media_stack'][ $index ]['has_src'] && '' !== $src ) {
+				$this->append_text( $context['output'], '[' . ucfirst( strtolower( $context['media_stack'][ $index ]['type'] ) ) . '](' . $src . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+				$context['media_stack'][ $index ]['has_src'] = true;
 			}
 			return;
 		}
