@@ -259,7 +259,7 @@ HTML;
 			'content-for-agents/quote-child',
 			static function () use ( &$executions ): string {
 				++$executions;
-				return '**Quoted callback**';
+				return "**Quoted callback**\n  \nSecond quoted line";
 			}
 		);
 
@@ -269,8 +269,63 @@ HTML;
 <!-- /wp:quote -->
 HTML;
 
-		$this->assertSame( "> **Quoted callback**\n> \n> Quote citation", $this->convert_post_content( $content ) );
+		$this->assertSame( "> **Quoted callback**\n>\n> Second quoted line\n>\n> Quote citation", $this->convert_post_content( $content ) );
 		$this->assertSame( 1, $executions );
+	}
+
+	/**
+	 * A custom quote child does not flatten links or emphasis in its citation.
+	 */
+	public function test_quote_with_callback_preserves_formatted_citation(): void {
+		$content = <<<'HTML'
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:content-for-agents/test-block {"text":"Quoted child"} /--><cite title="a > b"><em>Editorial</em> <a href="https://example.com/source">source</a></cite></blockquote>
+<!-- /wp:quote -->
+HTML;
+		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+		$this->assertSame(
+			"> **Quoted child**\n>\n> *Editorial* [source](https://example.com/source)",
+			( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), get_post( $post_id ) )
+		);
+
+		$content = str_replace( ' title="a > b"', '', $content );
+		$this->assertSame(
+			"> **Quoted child**\n>\n> *Editorial* [source](https://example.com/source)",
+			$this->convert_post_content( $content )
+		);
+	}
+
+	/**
+	 * Quote-owned paragraphs retain their order around a custom child and cite.
+	 */
+	public function test_quote_with_callback_preserves_owned_text_around_citation(): void {
+		$content = <<<'HTML'
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><p>Owned <strong>intro</strong>.</p><!-- wp:content-for-agents/test-block {"text":"Quoted child"} /--><p>Owned ending.</p><cite><em>Editorial</em> <a href="https://example.com/source">source</a></cite></blockquote>
+<!-- /wp:quote -->
+HTML;
+
+		$this->assertSame(
+			"> Owned **intro**.\n>\n> **Quoted child**\n>\n> Owned ending.\n>\n> *Editorial* [source](https://example.com/source)",
+			$this->convert_post_content( $content )
+		);
+	}
+
+	/**
+	 * Callback-bearing quotes do not expose script or style bodies.
+	 */
+	public function test_quote_with_callback_omits_owned_script_and_style_content(): void {
+		$content = <<<'HTML'
+<!-- wp:quote -->
+<blockquote class="wp-block-quote"><!-- wp:content-for-agents/test-block {"text":"Quoted child"} /--><!-- <cite>HIDDEN COMMENT</cite> --><script>HIDDEN SCRIPT</script><style>HIDDEN STYLE</style><cite>Safe source</cite></blockquote>
+<!-- /wp:quote -->
+HTML;
+		$post_id = self::factory()->post->create( array( 'post_status' => 'draft' ) );
+
+		$this->assertSame(
+			"> **Quoted child**\n>\n> Safe source",
+			( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), get_post( $post_id ) )
+		);
 	}
 
 	/**
@@ -347,6 +402,219 @@ MARKDOWN
 	}
 
 	/**
+	 * Audio and video URLs survive both direct src and nested source markup.
+	 */
+	public function test_media_elements_preserve_the_first_source_url(): void {
+		$html = <<<'HTML'
+<figure><audio controls src="https://example.com/one.mp3"><source src="https://example.com/ignored.mp3"></audio><figcaption>Audio caption</figcaption></figure>
+<figure><video controls><source src="https://example.com/one.mp4"><source src="https://example.com/ignored.mp4"></video><figcaption>Video caption</figcaption></figure>
+HTML;
+
+		$this->assertSame(
+			"[Audio](https://example.com/one.mp3)\n*Audio caption*\n\n[Video](https://example.com/one.mp4)\n*Video caption*",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Link destinations remain valid when source URLs contain parentheses.
+	 */
+	public function test_link_destinations_escape_parentheses(): void {
+		$html = '<p><a href="https://example.com/a(b)">Link</a> <img src="https://example.com/a(b).png" alt="Image"></p><audio src="https://example.com/a(b).mp3"></audio><video><source src="https://example.com/a(b).mp4"></video>';
+
+		$this->assertSame(
+			"[Link](https://example.com/a\\(b\\)) ![Image](https://example.com/a\\(b\\).png)\n\n[Audio](https://example.com/a\\(b\\).mp3)[Video](https://example.com/a\\(b\\).mp4)",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+		$this->assertSame(
+			'[Backslash](https://example.com/a\\\\b) [Space](https://example.com/a%20b) [Angle](https://example.com/a%3Cb%3E)',
+			( new HTML_To_Markdown_Converter() )->convert( '<a href="https://example.com/a\\b">Backslash</a> <a href="https://example.com/a b">Space</a> <a href="https://example.com/a&lt;b&gt;">Angle</a>' )
+		);
+	}
+
+	/**
+	 * Adjacent links stay separate through comments and non-rendering wrappers.
+	 */
+	public function test_adjacent_links_have_a_separator(): void {
+		$html = '<a href="https://example.com/a">First</a><!-- marker --><span><a href="https://example.com/b">Second</a></span><a href="https://example.com/c">Third</a>';
+		$this->assertSame(
+			'[First](https://example.com/a) [Second](https://example.com/b) [Third](https://example.com/c)',
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Nested list items retain the indentation that makes them structural.
+	 */
+	public function test_nested_list_items_keep_their_indentation(): void {
+		$html = '<ul><li>Parent<ul><li>Child</li></ul></li></ul>';
+		$this->assertSame( "- Parent\n\n  - Child", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Preformatted code retains indentation while incidental HTML spacing does not.
+	 */
+	public function test_preformatted_code_keeps_indentation(): void {
+		$html = "<pre>first\n  indented\n</pre><p>  After.</p>";
+		$this->assertSame( "```\nfirst\n  indented\n```\n\nAfter.", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame(
+			"```\nfirst  \n\n\n  indented  \n```",
+			( new HTML_To_Markdown_Converter() )->convert( "<pre>first  \n\n\n  indented  \n</pre>" )
+		);
+	}
+
+	/**
+	 * Code delimiters exceed the longest backtick sequence in their content.
+	 */
+	public function test_code_delimiters_do_not_collide_with_content(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( "````\nconst fence = \"```\";\n````", $converter->convert( '<pre>const fence = "```";</pre>' ) );
+		$this->assertSame( '``a`b``', $converter->convert( '<p><code>a`b</code></p>' ) );
+		$this->assertSame( '`` `a ``', $converter->convert( '<code>`a</code>' ) );
+		$this->assertSame( '`` a` ``', $converter->convert( '<code>a`</code>' ) );
+		$this->assertSame( '```` ``` ````', $converter->convert( '<code>```</code>' ) );
+		$this->assertSame( "````\n```\n````", $converter->convert( '<pre>&#96;&#96;&#96;</pre>' ) );
+		$this->assertSame( '`` ` ``', $converter->convert( '<code>&#96;</code>' ) );
+		$this->assertSame( '`foo bar`', $converter->convert( '<code>foo<br>bar</code>' ) );
+		$this->assertSame( '`  x  `', $converter->convert( '<code> x </code>' ) );
+		$this->assertSame( '` `', $converter->convert( '<code> </code>' ) );
+		$this->assertSame( "```\nabc\n```", $converter->convert( '<pre>abc' ) );
+		$this->assertSame( '`abc`', $converter->convert( '<code>abc' ) );
+	}
+
+	/**
+	 * Ordinary text still trims trailing spaces and excess line breaks.
+	 */
+	public function test_non_code_whitespace_is_normalized(): void {
+		$html = '<p>Hello </p><p>World</p><p>A<br><br><br>B</p>';
+		$this->assertSame( "Hello\n\nWorld\n\nA\n\nB", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Ordinary ordered siblings keep their position around an authoritative callback.
+	 */
+	public function test_ordered_list_keeps_fallback_markers_around_callback(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/ordered-list-item',
+			static function (): string {
+				return '6. **Callback item**';
+			}
+		);
+		$content = <<<'HTML'
+<!-- wp:list {"ordered":true,"start":5} -->
+<ol class="wp-block-list" start="5"><!-- wp:list-item -->
+<li>First item</li>
+<!-- /wp:list-item --><!-- wp:content-for-agents/ordered-list-item /--><!-- wp:list-item -->
+<li>Third item</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->
+HTML;
+
+		$this->assertSame( "5. First item\n6. **Callback item**\n7. Third item", $this->convert_post_content( $content ) );
+	}
+
+	/**
+	 * Nested callbacks do not remove their list item's marker; suppressed items
+	 * do not consume the next ordered marker.
+	 */
+	public function test_ordered_list_keeps_markers_with_nested_and_suppressed_callbacks(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/nested-list-content',
+			static function (): string {
+				return '**Nested callback**';
+			}
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/suppressed-list-item',
+			static function (): string {
+				return '';
+			}
+		);
+		$content = <<<'HTML'
+<!-- wp:list {"ordered":true,"start":3} -->
+<ol class="wp-block-list" start="3"><!-- wp:list-item -->
+<li>First item <!-- wp:content-for-agents/nested-list-content /--> ending.</li>
+<!-- /wp:list-item --><!-- wp:content-for-agents/suppressed-list-item /--><!-- wp:list-item -->
+<li>Second item</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->
+HTML;
+
+		$this->assertSame( "3. First item\n\n   **Nested callback**\n\n   ending.\n4. Second item", $this->convert_post_content( $content ) );
+	}
+
+	/**
+	 * Html-fallback metadata does not turn a native list item into a callback.
+	 */
+	public function test_ordered_list_html_fallback_metadata_keeps_marker(): void {
+		$block_type = \WP_Block_Type_Registry::get_instance()->get_registered( 'core/list-item' );
+		$this->assertNotNull( $block_type );
+		$supports = $block_type->supports;
+
+		$block_type->supports['contentForAgents'] = array( 'mode' => 'html-fallback' );
+
+		try {
+			Block_Markdown_Registry::register(
+				'content-for-agents/list-metadata-trigger',
+				static function (): string {
+					return '6. Callback item';
+				}
+			);
+			$content = <<<'HTML'
+<!-- wp:list {"ordered":true,"start":5} -->
+<ol class="wp-block-list" start="5"><!-- wp:list-item -->
+<li>Native item</li>
+<!-- /wp:list-item --><!-- wp:content-for-agents/list-metadata-trigger /--></ol>
+<!-- /wp:list -->
+HTML;
+			$this->assertSame( "5. Native item\n6. Callback item", $this->convert_post_content( $content ) );
+		} finally {
+			$block_type->supports = $supports;
+		}
+	}
+
+	/**
+	 * The HTML fallback omits script and style elements with their bodies.
+	 */
+	public function test_html_converter_omits_script_and_style_bodies(): void {
+		$html = '<p>Before.</p><script>HIDDEN SCRIPT</script><style>HIDDEN STYLE</style><p>After.</p>';
+
+		$this->assertSame( "Before.\n\nAfter.", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Context-dependent core blocks resolve against the post being converted,
+	 * without executing shortcodes as the_content would.
+	 */
+	public function test_dynamic_post_blocks_convert_without_executing_shortcodes(): void {
+		$executions = 0;
+		add_shortcode(
+			'block_gauntlet_shortcode',
+			static function () use ( &$executions ): string {
+				++$executions;
+				return '<strong>SENTINEL-SHORTCODE</strong> output.';
+			}
+		);
+
+		try {
+			$post_id  = self::factory()->post->create(
+				array(
+					'post_title'   => 'SENTINEL-POST-TITLE',
+					'post_excerpt' => 'SENTINEL-POST-EXCERPT text.',
+					'post_content' => '<!-- wp:post-title /--><!-- wp:post-excerpt /--><!-- wp:shortcode -->[block_gauntlet_shortcode]<!-- /wp:shortcode -->',
+					'post_status'  => 'draft',
+				)
+			);
+			$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
+		} finally {
+			remove_shortcode( 'block_gauntlet_shortcode' );
+		}
+
+		$this->assertSame( "## SENTINEL-POST-TITLE\n\nSENTINEL-POST-EXCERPT text.\n\n[block_gauntlet_shortcode]", $markdown );
+		$this->assertSame( 0, $executions );
+	}
+
+	/**
 	 * Cell-internal line and block boundaries do not split Markdown table rows.
 	 */
 	public function test_table_cells_support_line_and_block_boundaries(): void {
@@ -405,12 +673,19 @@ MARKDOWN
 	/**
 	 * Representative Gutenberg HTML matches the golden Markdown fixture.
 	 */
-	public function test_block_hammer_fixture_matches_golden_markdown(): void {
-		$html     = file_get_contents( __DIR__ . '/../fixtures/block-hammer.html' );
-		$expected = file_get_contents( __DIR__ . '/../fixtures/block-hammer.md' );
+	public function test_block_gauntlet_fixture_matches_golden_markdown(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/gauntlet-list-item',
+			static function ( array $block ): string {
+				return '- **' . ( $block['attrs']['text'] ?? '' ) . '**';
+			}
+		);
+		$html     = file_get_contents( __DIR__ . '/../fixtures/block-gauntlet.html' );
+		$expected = file_get_contents( __DIR__ . '/../fixtures/block-gauntlet.md' );
 
 		$this->assertIsString( $html );
 		$this->assertIsString( $expected );
+		$this->assert_block_gauntlet_types( $html );
 
 		$post_id  = self::factory()->post->create(
 			array(
@@ -421,19 +696,72 @@ MARKDOWN
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( rtrim( $expected ), $markdown );
-		$this->assert_block_hammer_structure( $markdown );
+		$this->assert_block_gauntlet_structure( $markdown );
 	}
 
 	/**
-	 * Asserts structural invariants for the block-hammer fixture.
+	 * Keep the fixture's audited core-block set explicit. Of WordPress 6.8's
+	 * static blocks, only core/missing is excluded because it is a fallback
+	 * placeholder rather than an authored content block.
+	 *
+	 * @param string $html Serialized fixture blocks.
+	 */
+	private function assert_block_gauntlet_types( string $html ): void {
+		preg_match_all( '/<!-- wp:([a-z-]+)(?=\s|-->)/', $html, $matches );
+		$actual = array_values( array_unique( $matches[1] ) );
+		sort( $actual );
+
+		$this->assertSame(
+			array(
+				'audio',
+				'button',
+				'buttons',
+				'code',
+				'column',
+				'columns',
+				'cover',
+				'details',
+				'embed',
+				'file',
+				'freeform',
+				'gallery',
+				'group',
+				'heading',
+				'html',
+				'image',
+				'list',
+				'list-item',
+				'media-text',
+				'more',
+				'nextpage',
+				'paragraph',
+				'preformatted',
+				'pullquote',
+				'quote',
+				'separator',
+				'social-link',
+				'social-links',
+				'spacer',
+				'table',
+				'text-columns',
+				'verse',
+				'video',
+			),
+			$actual
+		);
+	}
+
+	/**
+	 * Asserts structural invariants for the block-gauntlet fixture.
 	 *
 	 * @param string $markdown Converted fixture Markdown.
 	 */
-	private function assert_block_hammer_structure( string $markdown ): void {
+	private function assert_block_gauntlet_structure( string $markdown ): void {
 		$sentinels = array(
 			'SENTINEL-START',
 			'SENTINEL-INLINE',
 			'SENTINEL-QUOTE',
+			'SENTINEL-PULLQUOTE',
 			'SENTINEL-CODE',
 			'SENTINEL-GROUP',
 			'SENTINEL-COLUMN-A',
@@ -445,6 +773,25 @@ MARKDOWN
 			'SENTINEL-VERSE',
 			'SENTINEL-GALLERY',
 			'SENTINEL-MEDIA-TEXT',
+			'SENTINEL-COVER',
+			'SENTINEL-FILE',
+			'SENTINEL-AUDIO',
+			'SENTINEL-VIDEO',
+			'SENTINEL-EMBED',
+			'SENTINEL-LIST-ITEM',
+			'SENTINEL-LIST-CALLBACK',
+			'SENTINEL-TEXT-COLUMNS',
+			'SENTINEL-FREEFORM',
+			'SENTINEL-SOCIAL',
+			'SENTINEL-CUSTOM-QUOTE',
+			'SENTINEL-CUSTOM-SUMMARY',
+			'SENTINEL-CUSTOM-CHILD-DETAILS',
+			'SENTINEL-MEDIA-CUSTOM-IMAGE',
+			'SENTINEL-MEDIA-CUSTOM-CHILD',
+			'SENTINEL-CUSTOM-COVER',
+			'SENTINEL-CUSTOM-GROUP-BEFORE',
+			'SENTINEL-CUSTOM-GROUP-CHILD',
+			'SENTINEL-CUSTOM-GROUP-AFTER',
 			'SENTINEL-TABLE',
 			'SENTINEL-UNKNOWN',
 			'SENTINEL-END',

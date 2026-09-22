@@ -142,27 +142,13 @@ class Markdown_Converter {
 			}
 
 			$inner = $block['innerBlocks'] ?? array();
-			if ( ! empty( $inner ) ) {
-				if ( ! $this->descendants_require_zipping( $inner ) ) {
-					$md = $converter->convert( render_block( $block ) );
-					if ( '' !== trim( $md ) ) {
-						$parts[] = $md;
-					}
-					continue;
-				}
-
+			if ( ! empty( $inner ) && $this->descendants_require_zipping( $inner ) ) {
 				if ( 'core/quote' === $block_name ) {
-					$inner_md = $this->blocks_to_markdown( $inner, $post );
-
-					// Child placeholders are absent from innerHTML; remaining text is
-					// the quote's citation. Keep child callbacks and nested quotes intact.
-					$citation = trim( html_entity_decode( wp_strip_all_tags( $block['innerHTML'] ?? '' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
-					if ( '' !== $citation ) {
-						$inner_md = trim( $inner_md ) . "\n\n" . $citation;
-					}
+					$inner_md = $this->zip_inner_content( $block, $post, $converter, true );
 					if ( '' !== trim( $inner_md ) ) {
-						// Prefix blank lines too, so multiple paragraphs form one quote.
+						// Prefix the complete ordered content, including blank lines.
 						$inner_md = '> ' . str_replace( "\n", "\n> ", trim( $inner_md ) );
+						$inner_md = (string) preg_replace( '/^>[ \t]+$/m', '>', $inner_md );
 					}
 					if ( '' !== trim( $inner_md ) ) {
 						$parts[] = $inner_md;
@@ -170,7 +156,8 @@ class Markdown_Converter {
 					continue;
 				}
 
-				$zipped_md = $this->zip_inner_content( $block, $post, $converter );
+				$separator = 'core/list' === $block_name ? "\n" : "\n\n";
+				$zipped_md = $this->zip_inner_content( $block, $post, $converter, false, $separator );
 				if ( '' !== trim( $zipped_md ) ) {
 					$parts[] = $zipped_md;
 				}
@@ -200,23 +187,8 @@ class Markdown_Converter {
 	private function descendants_require_zipping( array $blocks ): bool {
 		foreach ( $blocks as $block ) {
 			$block_name = $block['blockName'] ?? null;
-			if ( is_string( $block_name ) ) {
-				if ( Block_Markdown_Registry::has( $block_name ) ) {
-					return true;
-				}
-
-				$config = Block_Markdown_Resolver::get_block_config( $block_name );
-				if ( null !== $config ) {
-					$mode = isset( $config['mode'] ) ? sanitize_key( (string) $config['mode'] ) : 'html-fallback';
-					if ( in_array( $mode, array( 'strip', 'children-only' ), true ) ) {
-						return true;
-					}
-
-					$callback = $config['callback'] ?? null;
-					if ( is_string( $callback ) && is_callable( $callback ) ) {
-						return true;
-					}
-				}
+			if ( is_string( $block_name ) && $this->has_custom_markdown_strategy( $block_name ) ) {
+				return true;
 			}
 
 			if ( $this->descendants_require_zipping( $block['innerBlocks'] ?? array() ) ) {
@@ -228,45 +200,125 @@ class Markdown_Converter {
 	}
 
 	/**
+	 * Whether a block has a strategy that replaces or suppresses HTML fallback.
+	 *
+	 * @param string $block_name Registered block name.
+	 * @return bool Whether callback-aware traversal is needed.
+	 */
+	private function has_custom_markdown_strategy( string $block_name ): bool {
+		if ( Block_Markdown_Registry::has( $block_name ) ) {
+			return true;
+		}
+
+		$config = Block_Markdown_Resolver::get_block_config( $block_name );
+		if ( null === $config ) {
+			return false;
+		}
+
+		$mode = isset( $config['mode'] ) ? sanitize_key( (string) $config['mode'] ) : 'html-fallback';
+		if ( in_array( $mode, array( 'strip', 'children-only' ), true ) ) {
+			return true;
+		}
+
+		$callback = $config['callback'] ?? null;
+		return is_string( $callback ) && is_callable( $callback );
+	}
+
+	/**
 	 * Converts wrapper-owned HTML and child blocks in innerContent order.
 	 *
 	 * @param array                      $block     Parent block.
 	 * @param \WP_Post                   $post      Post being converted.
-	 * @param HTML_To_Markdown_Converter $converter HTML converter.
+	 * @param HTML_To_Markdown_Converter $converter        HTML converter.
+	 * @param bool                       $quote_fragments  Strip quote/cite wrappers before converting fragments.
+	 * @param string                     $separator        Markdown separator between owned fragments and children.
 	 * @return string Zipped Markdown.
 	 */
-	private function zip_inner_content( array $block, \WP_Post $post, HTML_To_Markdown_Converter $converter ): string {
+	private function zip_inner_content( array $block, \WP_Post $post, HTML_To_Markdown_Converter $converter, bool $quote_fragments = false, string $separator = "\n\n" ): string {
 		$parts        = array();
 		$inner_blocks = $block['innerBlocks'] ?? array();
 		$inner_index  = 0;
+		$list_context = 'core/list' === ( $block['blockName'] ?? null )
+			? array(
+				'ordered' => ! empty( $block['attrs']['ordered'] ),
+				'index'   => (int) ( $block['attrs']['start'] ?? 1 ),
+			)
+			: null;
 
 		foreach ( $block['innerContent'] ?? array() as $fragment ) {
 			if ( null === $fragment ) {
 				if ( isset( $inner_blocks[ $inner_index ] ) ) {
-					$child_md = $this->blocks_to_markdown( array( $inner_blocks[ $inner_index ] ), $post );
+					$child_md = $this->convert_zipped_child( $inner_blocks[ $inner_index ], $post, $converter, $list_context );
 					if ( '' !== trim( $child_md ) ) {
 						$parts[] = $child_md;
+						if ( null !== $list_context ) {
+							++$list_context['index'];
+						}
 					}
 				}
 				++$inner_index;
 				continue;
 			}
 
-			$owned_md = $converter->convert( (string) $fragment );
+			$owned_html = (string) $fragment;
+			if ( $quote_fragments ) {
+				$owned_html = (string) preg_replace( '/<!--.*?-->/s', '', $owned_html );
+				$owned_html = (string) preg_replace( '~</?(?:blockquote|cite)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', '', $owned_html );
+			}
+			$owned_md = $converter->convert( $owned_html );
 			if ( '' !== trim( $owned_md ) ) {
 				$parts[] = $owned_md;
 			}
 		}
 
 		while ( isset( $inner_blocks[ $inner_index ] ) ) {
-			$child_md = $this->blocks_to_markdown( array( $inner_blocks[ $inner_index ] ), $post );
+			$child_md = $this->convert_zipped_child( $inner_blocks[ $inner_index ], $post, $converter, $list_context );
 			if ( '' !== trim( $child_md ) ) {
 				$parts[] = $child_md;
+				if ( null !== $list_context ) {
+					++$list_context['index'];
+				}
 			}
 			++$inner_index;
 		}
 
-		return implode( "\n\n", $parts );
+		return implode( $separator, $parts );
+	}
+
+	/**
+	 * Convert a child while preserving native list structure around callbacks.
+	 *
+	 * @param array                      $child     Parsed child block.
+	 * @param \WP_Post                   $post      Post being converted.
+	 * @param HTML_To_Markdown_Converter $converter HTML converter.
+	 * @param array|null                 $list_context Parent list state, if applicable.
+	 * @return string Child Markdown.
+	 */
+	private function convert_zipped_child( array $child, \WP_Post $post, HTML_To_Markdown_Converter $converter, ?array $list_context ): string {
+		$is_native_item = null !== $list_context
+			&& 'core/list-item' === ( $child['blockName'] ?? null )
+			&& ! $this->has_custom_markdown_strategy( 'core/list-item' );
+
+		if ( $is_native_item && ! $this->descendants_require_zipping( $child['innerBlocks'] ?? array() ) ) {
+			$tag   = $list_context['ordered'] ? 'ol' : 'ul';
+			$start = $list_context['ordered'] ? ' start="' . $list_context['index'] . '"' : '';
+			return $converter->convert( '<' . $tag . $start . '>' . render_block( $child ) . '</' . $tag . '>' );
+		}
+
+		$markdown = $this->blocks_to_markdown( array( $child ), $post );
+		if ( ! $is_native_item || '' === trim( $markdown ) ) {
+			return $markdown;
+		}
+
+		$marker   = $list_context['ordered'] ? $list_context['index'] . '. ' : '- ';
+		$lines    = explode( "\n", trim( $markdown ) );
+		$lines[0] = (string) preg_replace( '/^[-+*]\s+/', '', $lines[0] );
+		foreach ( $lines as $index => $line ) {
+			if ( 0 < $index && '' !== $line ) {
+				$lines[ $index ] = str_repeat( ' ', strlen( $marker ) ) . $line;
+			}
+		}
+		return $marker . implode( "\n", $lines );
 	}
 
 	/**
