@@ -4,7 +4,7 @@
 
 Content for Agents is a WordPress VIP plugin that publishes posts and pages as Markdown and provides `/llms.txt` discovery. It is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
 
-The supported runtime is WordPress 6.8 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required only to develop and build the settings interface.
+The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required only to develop and build the settings interface.
 
 ## Repository layout
 
@@ -33,6 +33,7 @@ Run these checks after making relevant changes:
 composer validate --strict
 composer phpcs
 composer test:unit
+npm run test:frontend
 npm run typecheck
 npm run lint:js
 npm run format:check

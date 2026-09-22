@@ -78,6 +78,9 @@ jobs:
           test -f build/settings/style-index.css
           test -f build/settings/style-index-rtl.css
 
+      - name: Run frontend tests
+        run: npm run test:frontend
+
   integration:
     name: Integration
     runs-on: ubuntu-latest

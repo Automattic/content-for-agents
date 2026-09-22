@@ -101,6 +101,7 @@ class Markdown_Response {
 		$ttl           = $cache_ttl > 0 ? $cache_ttl : self::CACHE_TTL;
 
 		header( 'Content-Type: text/markdown; charset=utf-8' );
+		send_nosniff_header();
 		header( 'Vary: Accept' );
 		header( 'X-Robots-Tag: noindex' );
 		header( 'X-Markdown-Tokens: ' . $token_count );

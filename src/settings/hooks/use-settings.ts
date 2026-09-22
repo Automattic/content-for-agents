@@ -13,16 +13,16 @@ export default function useSettings() {
 	const [ attempt, setAttempt ] = useState( 0 );
 	// Sections share one option in WordPress. Serialize writes to avoid one
 	// section overwriting another while preserving each section's local draft.
-	const pendingSave = useRef< Promise< unknown > >( Promise.resolve() );
+	const pendingSaveRef = useRef< Promise< unknown > >( Promise.resolve() );
 	const saveSettings = useCallback( ( patch: Partial< Settings > ) => {
-		const request = pendingSave.current.then( () =>
+		const request = pendingSaveRef.current.then( () =>
 			apiFetch< SettingsResponse >( {
 				path: settingsPath,
 				method: 'POST',
 				data: patch,
 			} )
 		);
-		pendingSave.current = request.catch( () => undefined );
+		pendingSaveRef.current = request.catch( () => undefined );
 		return request;
 	}, [] );
 

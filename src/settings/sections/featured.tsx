@@ -1,5 +1,4 @@
 import { Button, Notice, Spinner, TextControl } from '@wordpress/components';
-import { decodeEntities } from '@wordpress/html-entities';
 import { __, sprintf } from '@wordpress/i18n';
 
 import OrderButtons from '../components/order-buttons';
@@ -16,7 +15,7 @@ export default function Featured( {
 	saveSettings,
 }: SectionProps & { resolved: ResolvedPost[] } ) {
 	const state = useSection( { featured_posts: settings.featured_posts }, onSaved, saveSettings );
-	const { records, query, setQuery, results, setResults, page, setPage, more, loading, error } =
+	const { records, query, setSearchQuery, results, page, setPage, more, loading, error } =
 		usePostSearch( resolved );
 	const ids = state.draft.featured_posts;
 	return (
@@ -33,11 +32,7 @@ export default function Featured( {
 				__next40pxDefaultSize
 				label={ __( 'Search published posts', 'content-for-agents' ) }
 				value={ query }
-				onChange={ value => {
-					setQuery( value );
-					setPage( 1 );
-					setResults( [] );
-				} }
+				onChange={ setSearchQuery }
 				autoComplete="off"
 			/>
 			<div aria-live="polite">
@@ -61,7 +56,7 @@ export default function Featured( {
 								state.setDraft( {
 									featured_posts: [ ...ids, post.id ],
 								} );
-								setQuery( '' );
+								setSearchQuery( '' );
 							} }
 						>
 							{ post.title || __( 'Untitled post', 'content-for-agents' ) }
@@ -77,14 +72,13 @@ export default function Featured( {
 			) }
 			<ol className="content-for-agents-list">
 				{ ids.map( ( id, index ) => {
-					const label = decodeEntities(
+					const label =
 						records[ id ]?.title ||
-							sprintf(
-								/* translators: %d: Post ID. */
-								__( 'Post %d (unavailable)', 'content-for-agents' ),
-								id
-							)
-					);
+						sprintf(
+							/* translators: %d: Post ID. */
+							__( 'Post %d (unavailable)', 'content-for-agents' ),
+							id
+						);
 					return (
 						<li key={ id }>
 							<strong>{ label }</strong>

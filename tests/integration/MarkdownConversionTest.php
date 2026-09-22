@@ -700,9 +700,9 @@ MARKDOWN
 	}
 
 	/**
-	 * Keep the fixture's audited core-block set explicit. Of WordPress 6.8's
-	 * static blocks, only core/missing is excluded because it is a fallback
-	 * placeholder rather than an authored content block.
+	 * Keep the fixture's audited authored core-block set explicit. This is not
+	 * every registered WordPress 7.0 block: query-generated and fallback blocks
+	 * need contextual fixtures rather than representative static markup.
 	 *
 	 * @param string $html Serialized fixture blocks.
 	 */
@@ -713,6 +713,10 @@ MARKDOWN
 
 		$this->assertSame(
 			array(
+				'accordion',
+				'accordion-heading',
+				'accordion-item',
+				'accordion-panel',
 				'audio',
 				'button',
 				'buttons',
@@ -731,6 +735,7 @@ MARKDOWN
 				'image',
 				'list',
 				'list-item',
+				'math',
 				'media-text',
 				'more',
 				'nextpage',
@@ -769,6 +774,9 @@ MARKDOWN
 			'SENTINEL-BUTTONS-CONTAINER',
 			'SENTINEL-CTA-LINK',
 			'SENTINEL-DETAILS',
+			'SENTINEL-ACCORDION-QUESTION',
+			'SENTINEL-PANEL-ANSWER',
+			'SENTINEL-MATH',
 			'SENTINEL-PREFORMATTED',
 			'SENTINEL-VERSE',
 			'SENTINEL-GALLERY',

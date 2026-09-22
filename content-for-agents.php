@@ -3,7 +3,7 @@
  * Plugin Name:       Content for Agents
  * Description:       Publish WordPress VIP content as Markdown with agent discovery and extensible block conversion.
  * Version:           0.4.0
- * Requires at least: 6.8
+ * Requires at least: 7.0
  * Requires PHP:      8.2
  * Author:            WPVIP
  * Author URI:        https://wpvip.com
@@ -25,6 +25,36 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 if ( defined( 'CONTENT_FOR_AGENTS_LOADED' ) ) {
 	return;
+}
+
+if ( ! pre_init() ) {
+	return;
+}
+
+/**
+ * Check requirements for VIP application loaders that bypass plugin activation.
+ *
+ * WordPress checks the plugin headers during normal activation. Its version
+ * compatibility helper reads the unmodified core version, even when another
+ * plugin changes the global version string.
+ */
+function pre_init(): bool {
+	if ( is_php_version_compatible( '8.2' ) && is_wp_version_compatible( '7.0' ) ) {
+		return true;
+	}
+
+	add_action( 'admin_notices', __NAMESPACE__ . '\\incompatible_runtime_notice' );
+	add_action( 'network_admin_notices', __NAMESPACE__ . '\\incompatible_runtime_notice' );
+	return false;
+}
+
+/**
+ * Explain why the plugin did not load on an unsupported runtime.
+ */
+function incompatible_runtime_notice(): void {
+	echo '<div class="notice notice-error"><p>';
+	echo esc_html__( 'Content for Agents requires WordPress 7.0 or newer and PHP 8.2 or newer. The plugin was not loaded.', 'content-for-agents' );
+	echo '</p></div>';
 }
 
 define( 'CONTENT_FOR_AGENTS_LOADED', true );

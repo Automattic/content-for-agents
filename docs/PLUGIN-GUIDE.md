@@ -4,6 +4,15 @@ This guide describes the public behavior and extension contracts of Content for
 Agents. For installation, see the [README](../README.md). For development
 setup and checks, see the [contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).
 
+The plugin supports WordPress 7.0 or newer and PHP 8.2 or newer. When a VIP
+application loader includes it on an unsupported runtime, it leaves its hooks
+unregistered and shows an administrator notice.
+Markdown and `/llms.txt` responses send `X-Content-Type-Options: nosniff` so
+browsers do not interpret agent-facing text as another content type.
+The published Markdown can contain editor-authored text and output from trusted
+integration callbacks. Consumers that render it as HTML must sanitize the
+rendered HTML for their own trust boundary.
+
 ## Content and discovery
 
 For a published post at `/example/`, the following return the same Markdown:

@@ -6,4 +6,17 @@ export default defineConfig( [
 	{
 		ignores: [ '*.php', '**/build/', '**/node_modules/', '**/vendor/' ],
 	},
+	{
+		files: [ 'tests/frontend/**/*.test.js' ],
+		languageOptions: {
+			globals: {
+				beforeEach: 'readonly',
+				afterEach: 'readonly',
+				document: 'readonly',
+				expect: 'readonly',
+				jest: 'readonly',
+				test: 'readonly',
+			},
+		},
+	},
 ] );

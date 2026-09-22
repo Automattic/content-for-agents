@@ -5,8 +5,11 @@
 # Content for Agents
 
 Content for Agents is a WordPress VIP plugin that publishes posts and pages as
-Markdown and provides `/llms.txt` discovery. It requires WordPress 6.8 or newer,
+Markdown and provides `/llms.txt` discovery. It requires WordPress 7.0 or newer,
 PHP 8.2 or newer, and the WordPress VIP platform runtime.
+WordPress checks these requirements during normal activation. The plugin also
+skips loading and shows an administrator notice when included through an
+application loader on an unsupported runtime.
 
 The plugin is derived from **PRC Markdown for Agents by Pew Research Center**.
 See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
