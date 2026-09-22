@@ -167,6 +167,33 @@ HTML
 	}
 
 	/**
+	 * Markdown conversion uses stored block content, not the HTML presentation filter.
+	 */
+	public function test_post_conversion_does_not_apply_the_content_filter(): void {
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<!-- wp:paragraph --><p>Stored content.</p><!-- /wp:paragraph -->',
+				'post_status'  => 'draft',
+			)
+		);
+		$calls   = 0;
+		$filter  = static function () use ( &$calls ): string {
+			++$calls;
+			return 'Filtered presentation content.';
+		};
+
+		add_filter( 'the_content', $filter );
+		try {
+			$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
+		} finally {
+			remove_filter( 'the_content', $filter );
+		}
+
+		$this->assertSame( 'Stored content.', $markdown );
+		$this->assertSame( 0, $calls );
+	}
+
+	/**
 	 * Details retain wrapper-owned summary text around nested blocks.
 	 */
 	public function test_details_retains_owned_summary(): void {

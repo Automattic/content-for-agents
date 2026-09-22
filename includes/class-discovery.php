@@ -47,11 +47,7 @@ class Discovery {
 		}
 
 		global $post;
-		if ( ! $post || 'publish' !== $post->post_status ) {
-			return;
-		}
-
-		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
+		if ( ! $post instanceof \WP_Post || ! Markdown_Access::can_serve( $post, Markdown_Access::CONTEXT_DISCOVERY ) ) {
 			return;
 		}
 
@@ -62,49 +58,16 @@ class Discovery {
 				esc_url( $markdown_url )
 			);
 		}
-
-		$markdown_path_url = $this->get_markdown_path_url( $post );
-		if ( $markdown_path_url ) {
-			printf(
-				'<link rel="alternate" type="text/markdown" href="%s">' . "\n",
-				esc_url( $markdown_path_url )
-			);
-		}
 	}
 
 	/**
-	 * Get the markdown URL for a post (the .md endpoint).
+	 * Get the `/markdown` URL for a post.
 	 *
 	 * @param \WP_Post $post Post object.
 	 * @return string|null Full markdown URL or null.
 	 */
 	protected function get_markdown_url( $post ) {
-		$permalink = get_permalink( $post );
-		if ( ! $permalink ) {
-			return null;
-		}
-
-		if ( wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
-			return add_query_arg( 'markdown', 'true', $permalink );
-		}
-		return untrailingslashit( $permalink ) . '.md';
-	}
-
-	/**
-	 * Get the markdown URL for a post (the /markdown path endpoint).
-	 *
-	 * @param \WP_Post $post Post object.
-	 * @return string|null Full markdown URL or null.
-	 */
-	protected function get_markdown_path_url( $post ) {
-		$permalink = get_permalink( $post );
-		if ( ! $permalink ) {
-			return null;
-		}
-
-		if ( wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
-			return add_query_arg( 'markdown', 'true', $permalink );
-		}
-		return untrailingslashit( $permalink ) . '/markdown';
+		$url = Markdown_Endpoint::get_url( $post );
+		return '' !== $url ? $url : null;
 	}
 }

@@ -44,8 +44,7 @@ class Bootstrap {
 		add_action( 'content_for_agents_set_context', array( Block_Markdown_Registry::class, 'set_context' ) );
 		add_action( 'content_for_agents_clear_context', array( Block_Markdown_Registry::class, 'clear_context' ) );
 
-		new Content_Negotiation( $this->loader );
-		new Rewrite_Rules( $this->loader );
+		new Markdown_Endpoint( $this->loader );
 		new Markdown_Cache_Invalidator( $this->loader );
 		new Discovery( $this->loader );
 		new Robots_Txt( $this->loader );
