@@ -30,15 +30,70 @@ an independent ID fallback for unresolved drafts, pending posts, scheduled
 posts, or custom editorial statuses. Trash, auto-drafts, revisions, and other
 internal statuses are not served.
 
+Third-party paywall and access-control integrations must veto Markdown access
+when the current visitor is not entitled to read a post. They must also disable
+shared caching whenever entitlement depends on visitor-specific state such as a
+cookie:
+
+```php
+add_filter(
+	'content_for_agents_can_serve_markdown',
+	static function ( bool $allowed, \WP_Post $post, string $context ): bool {
+		if ( ! example_is_gated( $post ) ) {
+			return $allowed;
+		}
+
+		return 'discovery' !== $context && example_current_visitor_can_read( $post );
+	},
+	10,
+	3
+);
+
+add_filter(
+	'content_for_agents_can_cache_markdown',
+	static function ( bool $cacheable, \WP_Post $post ): bool {
+		return $cacheable && ! example_is_gated( $post );
+	},
+	10,
+	2
+);
+```
+
+Registering `content_for_agents_can_serve_markdown` automatically disables shared caching for `/llms.txt`, because discovery decisions may depend on the current visitor. Integrations with other visitor-specific discovery sections can also veto that cache directly:
+
+```php
+add_filter( 'content_for_agents_can_cache_llms_txt', '__return_false' );
+```
+
+These filters can only restrict the plugin's core access and cache decisions.
+They cannot expose drafts, private posts, previews, or password-protected posts
+that WordPress would otherwise deny. Access-control integrations are responsible
+for invalidating the Markdown document and `/llms.txt` caches when their gating
+configuration changes.
+
 Output includes YAML metadata, the title, and converted content. Published
 singular HTML pages advertise their alternate Markdown URL when supported. The
 front page advertises `/llms.txt`. The plugin preserves modern, nested, and
-legacy quotes, citations, lists, tables, links, images, and code.
+legacy quotes, citations, lists, tables, links, images, and code. Audio and video
+sources become Markdown links, with captions retained. Link destinations escape
+parentheses and backslashes, and encode whitespace and angle brackets for
+Markdown syntax.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
 Classic Editor and other freeform post HTML use the same HTML conversion path,
 so the plugin does not require the Block Editor to be enabled.
+Core post-title and post-excerpt blocks use the current post context. Direct
+`core/shortcode` blocks remain literal because conversion does not run
+`the_content`; other block render callbacks may still execute code.
+
+Conversion intentionally reads the stored `post_content` and walks its parsed
+block tree instead of applying WordPress's `the_content` filter. This preserves
+block metadata and the callback precedence described below, and avoids mixing
+HTML presentation filters with Markdown authorization. Integrations should use
+`content_for_agents_pre_markdown` or `content_for_agents_after_markdown` for
+content transformations and `content_for_agents_can_serve_markdown` for access
+control.
 
 Markdown and `/llms.txt` responses include a `Content-Signal` header. Its
 `ai-train`, `search`, and `ai-input` values default to `yes` and can be
@@ -81,6 +136,12 @@ string suppresses the block. Registry methods `register()`, `get()`, and `has()`
 are public. A later registration for the same block name replaces the earlier
 one.
 
+Callback Markdown is authoritative, including list markers and indentation.
+Callbacks for list items must return complete Markdown such as `- Item` or
+`1. Item`; the converter does not infer or prepend markers from `core/list`.
+An integration that needs ordered-list position or nesting can instead own the
+whole list with a `core/list` callback, which takes precedence over its children.
+
 A block can alternatively declare metadata in `block.json`:
 
 ```json
@@ -101,6 +162,9 @@ metadata path. Preserve this distinction when adding integrations.
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `content_for_agents_pre_markdown`                                     | Return `null` to continue, or a string to supply the document body before block conversion. Receives the post.                          |
 | `content_for_agents_after_markdown`                                   | Filter the body when serving a document. Direct `post_to_markdown()` calls do not run this filter.                                      |
+| `content_for_agents_can_serve_markdown`                               | Veto Markdown response or discovery access. Receives the post and `response` or `discovery` context. Cannot override core protection.   |
+| `content_for_agents_can_cache_markdown`                               | Veto shared caching for visitor-specific Markdown responses. Receives the post. Cannot override core cache exclusions.                  |
+| `content_for_agents_can_cache_llms_txt`                               | Veto shared object and HTTP caching for visitor-specific `/llms.txt` output. Cannot override core cache exclusions.                     |
 | `content_for_agents_authors`                                          | Return author entries containing `name` and optional `job_title` and `link`; receives the post.                                         |
 | `content_for_agents_frontmatter`                                      | Filter the metadata array; receives the post.                                                                                           |
 | `content_for_agents_llms_txt_sections`                                | Append section arrays with `slug`, `title`, `links`, and optional `description`. Duplicate slugs keep the first section.                |
