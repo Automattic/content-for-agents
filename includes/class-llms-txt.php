@@ -97,7 +97,7 @@ class LLMs_Txt {
 	public static function serve(): void {
 		$body = self::get_rendered_body();
 		self::send_headers();
-		if ( is_user_logged_in() ) {
+		if ( ! Markdown_Access::can_cache_discovery() ) {
 			nocache_headers();
 			header( 'Cache-Control: private, no-store, max-age=0' );
 		}
@@ -109,7 +109,8 @@ class LLMs_Txt {
 	 * Get the rendered /llms.txt body, using object cache when available.
 	 */
 	public static function get_rendered_body(): string {
-		$cached = is_user_logged_in() ? false : wp_cache_get( self::CACHE_KEY, self::CACHE_GROUP );
+		$cacheable = Markdown_Access::can_cache_discovery();
+		$cached    = $cacheable ? wp_cache_get( self::CACHE_KEY, self::CACHE_GROUP ) : false;
 		if ( is_string( $cached ) && '' !== $cached ) {
 			return $cached;
 		}
@@ -117,7 +118,7 @@ class LLMs_Txt {
 		$sections = self::collect_sections();
 		$body     = self::render_body( $sections );
 
-		if ( ! is_user_logged_in() ) {
+		if ( $cacheable ) {
 			// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- CACHE_TTL is one hour.
 			wp_cache_set( self::CACHE_KEY, $body, self::CACHE_GROUP, self::CACHE_TTL );
 		}
@@ -550,7 +551,7 @@ class LLMs_Txt {
 
 		foreach ( $query->posts as $post_id ) {
 			$post = get_post( (int) $post_id );
-			if ( ! $post instanceof \WP_Post || 'publish' !== $post->post_status || '' !== $post->post_password ) {
+			if ( ! $post instanceof \WP_Post || ! Markdown_Access::can_serve( $post, Markdown_Access::CONTEXT_DISCOVERY ) ) {
 				continue;
 			}
 

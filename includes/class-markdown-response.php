@@ -42,10 +42,13 @@ class Markdown_Response {
 			nocache_headers();
 			wp_die( esc_html__( 'This content is password protected.', 'content-for-agents' ), '', array( 'response' => 403 ) );
 		}
+		if ( ! Markdown_Access::can_serve( $post ) ) {
+			nocache_headers();
+			wp_die( esc_html__( 'Content not found.', 'content-for-agents' ), '', array( 'response' => 404 ) );
+		}
 
 		// Shared caches must contain only anonymous, public, non-preview output.
-		$cacheable = 'publish' === $post->post_status && '' === $post->post_password
-			&& ! is_user_logged_in() && ! is_preview() && ! isset( $_GET['preview'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$cacheable = Markdown_Access::can_cache( $post );
 		$cache_key = 'markdown_' . $post->ID;
 		$content   = $cacheable ? wp_cache_get( $cache_key, self::CACHE_GROUP ) : false;
 		$title     = html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
