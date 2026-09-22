@@ -1,6 +1,6 @@
 <?php
 /**
- * Settings page and REST API for Markdown for Agents.
+ * Settings page and REST API for Content for Agents.
  *
  * @package Content_For_Agents
  */
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Registers Settings > Markdown for Agents and GET/POST REST routes.
+ * Registers Settings > Content for Agents and GET/POST REST routes.
  *
  * Cookie-authenticated REST requests are nonce-verified automatically via
  * rest_cookie_check_errors; the React app must use createNonceMiddleware.

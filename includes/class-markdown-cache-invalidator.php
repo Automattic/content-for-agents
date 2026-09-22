@@ -59,29 +59,34 @@ class Markdown_Cache_Invalidator {
 	}
 
 	/**
-	 * Build URL paths to purge; VIP also purges all query-string variants.
+	 * Build Markdown endpoint URLs to purge.
 	 *
 	 * @param int $post_id Post ID.
 	 * @return string[]
 	 */
 	private static function get_purge_urls( int $post_id ): array {
-		$permalink = get_permalink( $post_id );
-		if ( ! is_string( $permalink ) || '' === $permalink ) {
-			return array();
+		$endpoint_url = Markdown_Endpoint::get_path_url( $post_id );
+		$query_url    = Markdown_Endpoint::get_query_url( $post_id );
+		$urls         = array();
+
+		if ( '' !== $query_url ) {
+			$permalink = get_permalink( $post_id );
+			if ( is_string( $permalink ) && '' !== $permalink ) {
+				// VIP purges all query-string variants when the base URL is purged.
+				$urls[] = $permalink;
+			}
 		}
 
-		if ( wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
-			return array( $permalink, add_query_arg( 'markdown', 'true', $permalink ) );
+		if ( '' !== $endpoint_url ) {
+			$urls[] = $endpoint_url;
+			$urls[] = $endpoint_url . '/';
 		}
 
-		$endpoint_base = untrailingslashit( $permalink );
+		if ( '' !== $query_url ) {
+			$urls[] = $query_url;
+		}
 
-		return array(
-			$permalink,
-			$endpoint_base . '.md',
-			$endpoint_base . '/markdown',
-			$endpoint_base . '/markdown/',
-		);
+		return $urls;
 	}
 
 	/**

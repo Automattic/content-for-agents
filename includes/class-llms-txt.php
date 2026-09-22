@@ -77,6 +77,7 @@ class LLMs_Txt {
 	 * parse_request runs after init, so integration filters are registered.
 	 *
 	 * @hook parse_request
+	 *
 	 */
 	public function maybe_serve(): void {
 		$request_uri = isset( $_SERVER['REQUEST_URI'] )
@@ -84,6 +85,8 @@ class LLMs_Txt {
 			: '';
 		$path        = wp_parse_url( $request_uri, PHP_URL_PATH );
 		$index_path  = wp_parse_url( home_url( '/llms.txt' ), PHP_URL_PATH );
+
+		// WP::$request is empty under plain permalinks, so compare URL paths here.
 		if ( ! is_string( $path ) || ! is_string( $index_path )
 			|| untrailingslashit( $path ) !== untrailingslashit( $index_path ) ) {
 			return;
@@ -344,7 +347,6 @@ class LLMs_Txt {
 	 */
 	public static function send_headers(): void {
 		header( 'Content-Type: text/plain; charset=utf-8' );
-		header( 'Vary: Accept' );
 		header( 'X-Robots-Tag: noindex' );
 		header( 'Cache-Control: public, max-age=300, s-maxage=3600' );
 
@@ -635,20 +637,12 @@ class LLMs_Txt {
 	}
 
 	/**
-	 * Build a .md URL for a post using the markdown-for-agents URL convention.
+	 * Build a `/markdown` URL for a post.
 	 *
 	 * @param \WP_Post $post Post object.
 	 */
 	public static function get_post_markdown_url( \WP_Post $post ): string {
-		$permalink = get_permalink( $post );
-		if ( ! $permalink ) {
-			return '';
-		}
-
-		if ( wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
-			return add_query_arg( 'markdown', 'true', $permalink );
-		}
-		return untrailingslashit( $permalink ) . '.md';
+		return Markdown_Endpoint::get_url( $post );
 	}
 
 	/**

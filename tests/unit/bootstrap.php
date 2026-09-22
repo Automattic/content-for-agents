@@ -14,4 +14,3 @@ function add_filter( $hook, $callback, $priority = 10, $accepted_args = 1 ) {
 }
 
 require_once __DIR__ . '/../../includes/class-loader.php';
-require_once __DIR__ . '/../../includes/class-content-negotiation.php';
