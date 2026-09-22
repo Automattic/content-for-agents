@@ -23,7 +23,8 @@ The public behavior and supported extension contracts are documented in the
 - Docker, OrbStack, or another Docker-compatible runtime for `wp-env`
 
 The local `wp-env` configuration runs WordPress 7.0 with PHP 8.2, matching the
-minimum supported runtime. CI tests the same versions.
+minimum supported runtime. CI runs the integration suite with PHP 8.2 through
+8.5 against the WordPress 7.0 and 7.1 branches and master.
 
 Composer and npm dependencies are development-only. WordPress supplies the
 runtime JavaScript packages, and the deployed plugin does not load Composer's
