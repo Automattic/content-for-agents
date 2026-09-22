@@ -65,7 +65,7 @@ WordPress also validates preview nonces. Authenticated and other non-public
 responses are kept out of shared caches.
 
 If you are working from a source checkout, follow the build instructions in the
-[contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).
+[contributor guide](docs/CONTRIBUTING.md).
 
 Use **Settings → Content for Agents** to edit the site summary, About links,
 categories, featured posts, and additional resources. The site name and tagline
@@ -74,5 +74,5 @@ provide neutral defaults.
 ## Documentation
 
 - [Plugin behavior and extension contracts](docs/PLUGIN-GUIDE.md)
-- [Development and contributing](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md)
+- [Development and contributing](docs/CONTRIBUTING.md)
 - [Attribution](docs/NOTICE.md)
