@@ -22,6 +22,8 @@ Output includes YAML metadata, the title, and converted content. HTML pages
 advertise alternate Markdown links and `/llms.txt`. The plugin preserves modern,
 nested, and legacy quotes, citations, lists, tables, links, images, and code.
 Audio and video sources become Markdown links, with captions retained.
+Link destinations escape parentheses and backslashes, and encode whitespace
+and angle brackets for Markdown syntax.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
@@ -67,6 +69,12 @@ Callbacks receive the parsed block and its post and return Markdown. An empty
 string suppresses the block. Registry methods `register()`, `get()`, and `has()`
 are public. A later registration for the same block name replaces the earlier
 one.
+
+Callback Markdown is authoritative, including list markers and indentation.
+Callbacks for list items must return complete Markdown such as `- Item` or
+`1. Item`; the converter does not infer or prepend markers from `core/list`.
+An integration that needs ordered-list position or nesting can instead own the
+whole list with a `core/list` callback, which takes precedence over its children.
 
 A block can alternatively declare metadata in `block.json`:
 

@@ -12,7 +12,7 @@ Second line
 
 - Outer item
 
-- Nested item
+  - Nested item
 
 - Second item
 
@@ -66,7 +66,7 @@ Nested media-text paragraph.
 
 SENTINEL-COVER nested content.
 
-[SENTINEL-FILE guide](https://example.com/guide.pdf)[Download guide](https://example.com/guide.pdf)
+[SENTINEL-FILE guide](https://example.com/guide\(v2\).pdf) [Download guide](https://example.com/guide\(v2\).pdf)
 
 [Audio](https://example.com/audio.mp3)
 *SENTINEL-AUDIO recording*
@@ -80,6 +80,7 @@ https://example.com/embed
 
 - SENTINEL-LIST-ITEM first child
 - Second child
+- **SENTINEL-LIST-CALLBACK**
 
 SENTINEL-TEXT-COLUMNS first.
 

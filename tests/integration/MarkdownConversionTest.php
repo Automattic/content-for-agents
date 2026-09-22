@@ -417,6 +417,163 @@ HTML;
 	}
 
 	/**
+	 * Link destinations remain valid when source URLs contain parentheses.
+	 */
+	public function test_link_destinations_escape_parentheses(): void {
+		$html = '<p><a href="https://example.com/a(b)">Link</a> <img src="https://example.com/a(b).png" alt="Image"></p><audio src="https://example.com/a(b).mp3"></audio><video><source src="https://example.com/a(b).mp4"></video>';
+
+		$this->assertSame(
+			"[Link](https://example.com/a\\(b\\)) ![Image](https://example.com/a\\(b\\).png)\n\n[Audio](https://example.com/a\\(b\\).mp3)[Video](https://example.com/a\\(b\\).mp4)",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+		$this->assertSame(
+			'[Backslash](https://example.com/a\\\\b) [Space](https://example.com/a%20b) [Angle](https://example.com/a%3Cb%3E)',
+			( new HTML_To_Markdown_Converter() )->convert( '<a href="https://example.com/a\\b">Backslash</a> <a href="https://example.com/a b">Space</a> <a href="https://example.com/a&lt;b&gt;">Angle</a>' )
+		);
+	}
+
+	/**
+	 * Adjacent links stay separate through comments and non-rendering wrappers.
+	 */
+	public function test_adjacent_links_have_a_separator(): void {
+		$html = '<a href="https://example.com/a">First</a><!-- marker --><span><a href="https://example.com/b">Second</a></span><a href="https://example.com/c">Third</a>';
+		$this->assertSame(
+			'[First](https://example.com/a) [Second](https://example.com/b) [Third](https://example.com/c)',
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Nested list items retain the indentation that makes them structural.
+	 */
+	public function test_nested_list_items_keep_their_indentation(): void {
+		$html = '<ul><li>Parent<ul><li>Child</li></ul></li></ul>';
+		$this->assertSame( "- Parent\n\n  - Child", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Preformatted code retains indentation while incidental HTML spacing does not.
+	 */
+	public function test_preformatted_code_keeps_indentation(): void {
+		$html = "<pre>first\n  indented\n</pre><p>  After.</p>";
+		$this->assertSame( "```\nfirst\n  indented\n```\n\nAfter.", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame(
+			"```\nfirst  \n\n\n  indented  \n```",
+			( new HTML_To_Markdown_Converter() )->convert( "<pre>first  \n\n\n  indented  \n</pre>" )
+		);
+	}
+
+	/**
+	 * Code delimiters exceed the longest backtick sequence in their content.
+	 */
+	public function test_code_delimiters_do_not_collide_with_content(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( "````\nconst fence = \"```\";\n````", $converter->convert( '<pre>const fence = "```";</pre>' ) );
+		$this->assertSame( '``a`b``', $converter->convert( '<p><code>a`b</code></p>' ) );
+		$this->assertSame( '`` `a ``', $converter->convert( '<code>`a</code>' ) );
+		$this->assertSame( '`` a` ``', $converter->convert( '<code>a`</code>' ) );
+		$this->assertSame( '```` ``` ````', $converter->convert( '<code>```</code>' ) );
+		$this->assertSame( "````\n```\n````", $converter->convert( '<pre>&#96;&#96;&#96;</pre>' ) );
+		$this->assertSame( '`` ` ``', $converter->convert( '<code>&#96;</code>' ) );
+		$this->assertSame( '`foo bar`', $converter->convert( '<code>foo<br>bar</code>' ) );
+		$this->assertSame( '`  x  `', $converter->convert( '<code> x </code>' ) );
+		$this->assertSame( '` `', $converter->convert( '<code> </code>' ) );
+		$this->assertSame( "```\nabc\n```", $converter->convert( '<pre>abc' ) );
+		$this->assertSame( '`abc`', $converter->convert( '<code>abc' ) );
+	}
+
+	/**
+	 * Ordinary text still trims trailing spaces and excess line breaks.
+	 */
+	public function test_non_code_whitespace_is_normalized(): void {
+		$html = '<p>Hello </p><p>World</p><p>A<br><br><br>B</p>';
+		$this->assertSame( "Hello\n\nWorld\n\nA\n\nB", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Ordinary ordered siblings keep their position around an authoritative callback.
+	 */
+	public function test_ordered_list_keeps_fallback_markers_around_callback(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/ordered-list-item',
+			static function (): string {
+				return '6. **Callback item**';
+			}
+		);
+		$content = <<<'HTML'
+<!-- wp:list {"ordered":true,"start":5} -->
+<ol class="wp-block-list" start="5"><!-- wp:list-item -->
+<li>First item</li>
+<!-- /wp:list-item --><!-- wp:content-for-agents/ordered-list-item /--><!-- wp:list-item -->
+<li>Third item</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->
+HTML;
+
+		$this->assertSame( "5. First item\n6. **Callback item**\n7. Third item", $this->convert_post_content( $content ) );
+	}
+
+	/**
+	 * Nested callbacks do not remove their list item's marker; suppressed items
+	 * do not consume the next ordered marker.
+	 */
+	public function test_ordered_list_keeps_markers_with_nested_and_suppressed_callbacks(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/nested-list-content',
+			static function (): string {
+				return '**Nested callback**';
+			}
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/suppressed-list-item',
+			static function (): string {
+				return '';
+			}
+		);
+		$content = <<<'HTML'
+<!-- wp:list {"ordered":true,"start":3} -->
+<ol class="wp-block-list" start="3"><!-- wp:list-item -->
+<li>First item <!-- wp:content-for-agents/nested-list-content /--> ending.</li>
+<!-- /wp:list-item --><!-- wp:content-for-agents/suppressed-list-item /--><!-- wp:list-item -->
+<li>Second item</li>
+<!-- /wp:list-item --></ol>
+<!-- /wp:list -->
+HTML;
+
+		$this->assertSame( "3. First item\n\n   **Nested callback**\n\n   ending.\n4. Second item", $this->convert_post_content( $content ) );
+	}
+
+	/**
+	 * Html-fallback metadata does not turn a native list item into a callback.
+	 */
+	public function test_ordered_list_html_fallback_metadata_keeps_marker(): void {
+		$block_type = \WP_Block_Type_Registry::get_instance()->get_registered( 'core/list-item' );
+		$this->assertNotNull( $block_type );
+		$supports = $block_type->supports;
+
+		$block_type->supports['contentForAgents'] = array( 'mode' => 'html-fallback' );
+
+		try {
+			Block_Markdown_Registry::register(
+				'content-for-agents/list-metadata-trigger',
+				static function (): string {
+					return '6. Callback item';
+				}
+			);
+			$content = <<<'HTML'
+<!-- wp:list {"ordered":true,"start":5} -->
+<ol class="wp-block-list" start="5"><!-- wp:list-item -->
+<li>Native item</li>
+<!-- /wp:list-item --><!-- wp:content-for-agents/list-metadata-trigger /--></ol>
+<!-- /wp:list -->
+HTML;
+			$this->assertSame( "5. Native item\n6. Callback item", $this->convert_post_content( $content ) );
+		} finally {
+			$block_type->supports = $supports;
+		}
+	}
+
+	/**
 	 * The HTML fallback omits script and style elements with their bodies.
 	 */
 	public function test_html_converter_omits_script_and_style_bodies(): void {
@@ -517,6 +674,12 @@ MARKDOWN
 	 * Representative Gutenberg HTML matches the golden Markdown fixture.
 	 */
 	public function test_block_gauntlet_fixture_matches_golden_markdown(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/gauntlet-list-item',
+			static function ( array $block ): string {
+				return '- **' . ( $block['attrs']['text'] ?? '' ) . '**';
+			}
+		);
 		$html     = file_get_contents( __DIR__ . '/../fixtures/block-gauntlet.html' );
 		$expected = file_get_contents( __DIR__ . '/../fixtures/block-gauntlet.md' );
 
@@ -616,6 +779,7 @@ MARKDOWN
 			'SENTINEL-VIDEO',
 			'SENTINEL-EMBED',
 			'SENTINEL-LIST-ITEM',
+			'SENTINEL-LIST-CALLBACK',
 			'SENTINEL-TEXT-COLUMNS',
 			'SENTINEL-FREEFORM',
 			'SENTINEL-SOCIAL',

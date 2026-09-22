@@ -63,7 +63,7 @@ final class HTML_To_Markdown_Converter {
 			$markdown = $this->convert_with_processor( new WP_HTML_Tag_Processor( $html ) );
 		}
 
-		return trim( $this->cleanup( $markdown ) );
+		return trim( $markdown );
 	}
 
 	/**
@@ -218,6 +218,7 @@ final class HTML_To_Markdown_Converter {
 			}
 		}
 
+		$this->flush_code( $document );
 		return $document['output'];
 	}
 
@@ -232,7 +233,10 @@ final class HTML_To_Markdown_Converter {
 			'at_line_start'    => true,
 			'blockquote_depth' => 0,
 			'in_pre'           => false,
+			'pre_code'         => null,
+			'inline_code'      => null,
 			'link_stack'       => array(),
+			'last_link_end'    => null,
 			'list_stack'       => array(),
 			'media_stack'      => array(),
 		);
@@ -247,6 +251,14 @@ final class HTML_To_Markdown_Converter {
 	 */
 	private function convert_token( $processor, ?string $token_name, array &$context ): void {
 		if ( '#text' === $token_name ) {
+			if ( null !== $context['pre_code'] ) {
+				$context['pre_code'] .= (string) $processor->get_modifiable_text();
+				return;
+			}
+			if ( null !== $context['inline_code'] ) {
+				$context['inline_code'] .= (string) $processor->get_modifiable_text();
+				return;
+			}
 			$this->append_text(
 				$context['output'],
 				(string) $processor->get_modifiable_text(),
@@ -263,9 +275,21 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		$is_closer = $processor->is_tag_closer();
+		if ( null !== $context['pre_code'] && 'PRE' !== $token_name ) {
+			if ( 'BR' === $token_name ) {
+				$context['pre_code'] .= "\n";
+			}
+			return;
+		}
+		if ( null !== $context['inline_code'] && 'CODE' !== $token_name ) {
+			if ( 'BR' === $token_name ) {
+				$context['inline_code'] .= "\n";
+			}
+			return;
+		}
 
 		if ( 'BR' === $token_name ) {
-			$this->append_newline( $context['output'], $context['at_line_start'] );
+			$this->append_newline( $context['output'], $context['at_line_start'], $context['in_pre'] );
 			return;
 		}
 
@@ -296,22 +320,21 @@ final class HTML_To_Markdown_Converter {
 
 		if ( 'PRE' === $token_name ) {
 			if ( $is_closer ) {
-				if ( ! $context['at_line_start'] ) {
-					$this->append_newline( $context['output'], $context['at_line_start'] );
-				}
-				$this->append_line( $context['output'], '```', $context['at_line_start'], $context['blockquote_depth'] );
-				$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-				$context['in_pre'] = false;
+				$this->flush_code( $context );
 			} else {
-				$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-				$this->append_line( $context['output'], '```', $context['at_line_start'], $context['blockquote_depth'] );
-				$context['in_pre'] = true;
+				$context['pre_code'] = '';
+				$context['in_pre']   = true;
 			}
 			return;
 		}
 
 		if ( 'CODE' === $token_name && ! $context['in_pre'] ) {
-			$this->append_text( $context['output'], '`', $context['at_line_start'], $context['blockquote_depth'], true );
+			if ( ! $is_closer ) {
+				$context['inline_code'] = '';
+				return;
+			}
+
+			$this->flush_code( $context );
 			return;
 		}
 
@@ -328,8 +351,12 @@ final class HTML_To_Markdown_Converter {
 		if ( 'A' === $token_name ) {
 			if ( $is_closer ) {
 				$href = array_pop( $context['link_stack'] );
-				$this->append_text( $context['output'], $href ? '](' . $href . ')' : ']', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->append_text( $context['output'], $href ? '](' . $this->escape_markdown_destination( $href ) . ')' : ']', $context['at_line_start'], $context['blockquote_depth'], true );
+				$context['last_link_end'] = strlen( $context['output'] );
 			} else {
+				if ( strlen( $context['output'] ) === $context['last_link_end'] && ! $context['at_line_start'] ) {
+					$this->append_text( $context['output'], ' ', $context['at_line_start'], $context['blockquote_depth'], true );
+				}
 				$context['link_stack'][] = (string) $processor->get_attribute( 'href' );
 				$this->append_text( $context['output'], '[', $context['at_line_start'], $context['blockquote_depth'], true );
 			}
@@ -340,7 +367,7 @@ final class HTML_To_Markdown_Converter {
 			$src = (string) $processor->get_attribute( 'src' );
 			if ( '' !== $src ) {
 				$alt = (string) $processor->get_attribute( 'alt' );
-				$this->append_text( $context['output'], '![' . $alt . '](' . $src . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->append_text( $context['output'], '![' . $alt . '](' . $this->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
 			}
 			return;
 		}
@@ -356,7 +383,7 @@ final class HTML_To_Markdown_Converter {
 					'has_src' => '' !== $src,
 				);
 				if ( '' !== $src ) {
-					$this->append_text( $context['output'], '[' . ucfirst( strtolower( $token_name ) ) . '](' . $src . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+					$this->append_text( $context['output'], '[' . ucfirst( strtolower( $token_name ) ) . '](' . $this->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
 				}
 			}
 			return;
@@ -366,7 +393,7 @@ final class HTML_To_Markdown_Converter {
 			$index = count( $context['media_stack'] ) - 1;
 			$src   = (string) $processor->get_attribute( 'src' );
 			if ( ! $context['media_stack'][ $index ]['has_src'] && '' !== $src ) {
-				$this->append_text( $context['output'], '[' . ucfirst( strtolower( $context['media_stack'][ $index ]['type'] ) ) . '](' . $src . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->append_text( $context['output'], '[' . ucfirst( strtolower( $context['media_stack'][ $index ]['type'] ) ) . '](' . $this->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
 				$context['media_stack'][ $index ]['has_src'] = true;
 			}
 			return;
@@ -402,9 +429,11 @@ final class HTML_To_Markdown_Converter {
 				array_pop( $context['list_stack'] );
 				$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
 			} else {
+				$start = 'OL' === $token_name ? $processor->get_attribute( 'start' ) : null;
+
 				$context['list_stack'][] = array(
 					'type'  => $token_name,
-					'index' => 0,
+					'index' => null !== $start ? (int) $start - 1 : 0,
 				);
 				$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
 			}
@@ -449,6 +478,7 @@ final class HTML_To_Markdown_Converter {
 			return;
 		}
 
+		$this->flush_code( $cell );
 		$current_row[] = $this->format_table_cell( $cell['output'] );
 		$cell          = null;
 	}
@@ -492,7 +522,7 @@ final class HTML_To_Markdown_Converter {
 	 * @return string Formatted table-cell content.
 	 */
 	private function format_table_cell( string $cell ): string {
-		$cell = trim( $this->cleanup( $cell ) );
+		$cell = trim( $cell );
 		$cell = (string) preg_replace( '/[ \t]*\n+[ \t]*/', '<br>', $cell );
 
 		return str_replace( '|', '\\|', $cell );
@@ -534,6 +564,76 @@ final class HTML_To_Markdown_Converter {
 	}
 
 	/**
+	 * Emit complete or unclosed code content from a conversion context.
+	 *
+	 * @param array $context Conversion context (by reference).
+	 */
+	private function flush_code( array &$context ): void {
+		if ( null !== $context['pre_code'] ) {
+			$content = (string) $context['pre_code'];
+			$fence   = $this->code_delimiter( $content, 3 );
+
+			$context['pre_code'] = null;
+			$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+			$this->append_line( $context['output'], $fence, $context['at_line_start'], $context['blockquote_depth'] );
+			$this->append_text( $context['output'], $content, $context['at_line_start'], $context['blockquote_depth'], true );
+			if ( ! $context['at_line_start'] ) {
+				$this->append_newline( $context['output'], $context['at_line_start'], true );
+			}
+			$this->append_line( $context['output'], $fence, $context['at_line_start'], $context['blockquote_depth'] );
+			$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+			$context['in_pre'] = false;
+		}
+
+		if ( null !== $context['inline_code'] ) {
+			$content = str_replace( array( "\r\n", "\r", "\n" ), ' ', (string) $context['inline_code'] );
+
+			$context['inline_code'] = null;
+
+			$fence         = $this->code_delimiter( $content, 1 );
+			$needs_padding = str_starts_with( $content, '`' ) || str_ends_with( $content, '`' )
+				|| ( str_starts_with( $content, ' ' ) && str_ends_with( $content, ' ' ) && '' !== trim( $content ) );
+			$space         = $needs_padding ? ' ' : '';
+			$this->append_text( $context['output'], $fence . $space . $content . $space . $fence, $context['at_line_start'], $context['blockquote_depth'], true );
+		}
+	}
+
+	/**
+	 * Choose a code delimiter longer than any backtick run in decoded content.
+	 *
+	 * @param string $content Decoded code content.
+	 * @param int    $minimum Minimum delimiter length.
+	 * @return string Backtick delimiter.
+	 */
+	private function code_delimiter( string $content, int $minimum ): string {
+		$longest_run = 0;
+		if ( str_contains( $content, '`' ) ) {
+			preg_match_all( '/`+/', $content, $runs );
+			foreach ( $runs[0] as $run ) {
+				$longest_run = max( $longest_run, strlen( $run ) );
+			}
+		}
+		return str_repeat( '`', max( $minimum, $longest_run + 1 ) );
+	}
+
+	/**
+	 * Escape characters that would terminate a Markdown link destination.
+	 *
+	 * @param string $url URL from an HTML attribute.
+	 * @return string Markdown-safe destination.
+	 */
+	private function escape_markdown_destination( string $url ): string {
+		$url = (string) preg_replace_callback(
+			'/[\s<>]/u',
+			static function ( array $matches ): string {
+				return rawurlencode( $matches[0] );
+			},
+			$url
+		);
+		return str_replace( array( '\\', '(', ')' ), array( '\\\\', '\\(', '\\)' ), $url );
+	}
+
+	/**
 	 * Appends plain text to the Markdown output.
 	 *
 	 * @param string $markdown            Markdown buffer (by reference).
@@ -551,7 +651,10 @@ final class HTML_To_Markdown_Converter {
 
 		if ( ! $preserve_whitespace ) {
 			$text = preg_replace( '/\s+/u', ' ', $text );
-			if ( 0 < $blockquote_depth && $at_line_start && '' === trim( $text ) ) {
+			if ( $at_line_start ) {
+				$text = ltrim( (string) $text );
+			}
+			if ( '' === $text ) {
 				return;
 			}
 		}
@@ -570,19 +673,24 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		$markdown     .= $text;
-		$at_line_start = false;
-		if ( 0 < $blockquote_depth && str_ends_with( $text, "\n" ) ) {
-			$at_line_start = true;
-		}
+		$at_line_start = str_ends_with( $text, "\n" );
 	}
 
 	/**
 	 * Appends a newline.
 	 *
-	 * @param string $markdown      Markdown buffer (by reference).
-	 * @param bool   $at_line_start Whether output is at the start of a line (by reference).
+	 * @param string $markdown            Markdown buffer (by reference).
+	 * @param bool   $at_line_start       Whether output is at the start of a line (by reference).
+	 * @param bool   $preserve_whitespace Whether code whitespace must be preserved.
 	 */
-	private function append_newline( string &$markdown, bool &$at_line_start ): void {
+	private function append_newline( string &$markdown, bool &$at_line_start, bool $preserve_whitespace = false ): void {
+		if ( ! $preserve_whitespace ) {
+			$markdown = rtrim( $markdown, " \t" );
+			if ( str_ends_with( $markdown, "\n\n" ) ) {
+				$at_line_start = true;
+				return;
+			}
+		}
 		$markdown     .= "\n";
 		$at_line_start = true;
 	}
@@ -623,8 +731,9 @@ final class HTML_To_Markdown_Converter {
 	 * @param int    $blockquote_depth Current blockquote depth.
 	 */
 	private function ensure_blank_line( string &$markdown, bool &$at_line_start, int $blockquote_depth = 0 ): void {
+		$markdown = rtrim( $markdown, " \t" );
 		if ( $blockquote_depth > 0 ) {
-			$separator = "\n" . str_repeat( '> ', $blockquote_depth ) . "\n";
+			$separator = "\n" . rtrim( str_repeat( '> ', $blockquote_depth ) ) . "\n";
 			if ( ! str_ends_with( $markdown, $separator ) ) {
 				$markdown = rtrim( $markdown, "\n" ) . $separator;
 			}
@@ -635,21 +744,5 @@ final class HTML_To_Markdown_Converter {
 		$markdown      = rtrim( $markdown, "\n" );
 		$markdown     .= "\n\n";
 		$at_line_start = true;
-	}
-
-	/**
-	 * Cleans up excessive whitespace and newlines.
-	 *
-	 * @param string $markdown Markdown buffer.
-	 * @return string Cleaned buffer.
-	 */
-	private function cleanup( string $markdown ): string {
-		// Remove trailing whitespace from lines.
-		$markdown = preg_replace( "/[ \t]+\n/", "\n", $markdown );
-		// Remove leading whitespace from lines (except in code blocks).
-		$markdown = preg_replace( "/\n[ \t]+(?!\s*```)/", "\n", (string) $markdown );
-		// Collapse multiple blank lines.
-		$markdown = preg_replace( "/\n{3,}/", "\n\n", (string) $markdown );
-		return (string) $markdown;
 	}
 }
