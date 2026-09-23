@@ -123,3 +123,21 @@ jobs:
         run: |
           npx wp-env start
           npm run test:integration
+
+  php-required:
+    name: PHP
+    runs-on: ubuntu-latest
+    needs: php
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Verify PHP matrix
+        run: test '${{ needs.php.result }}' = 'success'
+
+  integration-required:
+    name: Integration
+    runs-on: ubuntu-latest
+    needs: integration
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Verify integration matrix
+        run: test '${{ needs.integration.result }}' = 'success'
