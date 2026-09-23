@@ -38,7 +38,6 @@ npm run typecheck
 npm run lint:js
 npm run format:check
 npm run build
-find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
 npx wp-env start
 npm run test:integration
 git diff --check

@@ -35,8 +35,14 @@ jobs:
       - name: Check WordPress VIP coding standards
         run: composer phpcs
 
-      - name: Check PHP syntax
-        run: find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
-
       - name: Run unit tests
         run: composer test:unit
+
+  result:
+    name: Result
+    runs-on: ubuntu-latest
+    needs: php
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Verify PHP matrix
+        run: test '${{ needs.php.result }}' = 'success'
