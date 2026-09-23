@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Content for Agents
  * Description:       Publish WordPress VIP content as Markdown with agent discovery and extensible block conversion.
- * Version:           0.4.0
+ * Version:           0.5.0
  * Requires at least: 7.0
  * Requires PHP:      8.2
  * Author:            WPVIP
@@ -61,7 +61,7 @@ define( 'CONTENT_FOR_AGENTS_LOADED', true );
 define( 'CONTENT_FOR_AGENTS_FILE', __FILE__ );
 define( 'CONTENT_FOR_AGENTS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CONTENT_FOR_AGENTS_URL', plugin_dir_url( __FILE__ ) );
-define( 'CONTENT_FOR_AGENTS_VERSION', '0.4.0' );
+define( 'CONTENT_FOR_AGENTS_VERSION', '0.5.0' );
 
 // Autoload top-level plugin classes using WordPress filename conventions.
 spl_autoload_register(
