@@ -28,7 +28,8 @@ through 8.5. It runs the integration suite on those PHP versions against the
 WordPress 7.0 and 7.1 branches and master.
 For branch protection, require the stable `PHP`, `Frontend`, and `Integration`
 checks. The PHP and Integration checks pass only when every job in their
-respective matrices succeeds.
+respective matrices succeeds. Their matrix runs appear beneath the PHP matrix
+and Integration matrix callers in the Actions run view.
 
 Composer and npm dependencies are development-only. WordPress supplies the
 runtime JavaScript packages, and the deployed plugin does not load Composer's
