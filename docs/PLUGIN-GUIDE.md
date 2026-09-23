@@ -2,7 +2,16 @@
 
 This guide describes the public behavior and extension contracts of Content for
 Agents. For installation, see the [README](../README.md). For development
-setup and checks, see the [contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).
+setup and checks, see the [contributor guide](CONTRIBUTING.md).
+
+The plugin supports WordPress 7.0 or newer and PHP 8.2 or newer. When a VIP
+application loader includes it on an unsupported runtime, it leaves its hooks
+unregistered and shows an administrator notice.
+Markdown and `/llms.txt` responses send `X-Content-Type-Options: nosniff` so
+browsers do not interpret agent-facing text as another content type.
+The published Markdown can contain editor-authored text and output from trusted
+integration callbacks. Consumers that render it as HTML must sanitize the
+rendered HTML for their own trust boundary.
 
 ## Content and discovery
 
@@ -81,6 +90,8 @@ Markdown syntax.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
+WordPress 7.0 accordion headings become Markdown headings, their panels retain
+body text, and math block text is preserved.
 Classic Editor and other freeform post HTML use the same HTML conversion path,
 so the plugin does not require the Block Editor to be enabled.
 Core post-title and post-excerpt blocks use the current post context. Direct

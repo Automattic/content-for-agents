@@ -6,8 +6,11 @@
 
 Content for Agents is a WordPress VIP plugin that publishes supported content at
 `/markdown` paths, supports a `?markdown=true` query endpoint, and
-provides `/llms.txt` discovery. It requires WordPress 6.8 or newer, PHP 8.2 or
+provides `/llms.txt` discovery. It requires WordPress 7.0 or newer, PHP 8.2 or
 newer, and the WordPress VIP platform runtime.
+WordPress checks these requirements during normal activation. The plugin also
+skips loading and shows an administrator notice when included through an
+application loader on an unsupported runtime.
 
 The plugin is derived from **PRC Markdown for Agents by Pew Research Center**.
 See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
@@ -62,7 +65,7 @@ WordPress also validates preview nonces. Authenticated and other non-public
 responses are kept out of shared caches.
 
 If you are working from a source checkout, follow the build instructions in the
-[contributor guide](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md).
+[contributor guide](docs/CONTRIBUTING.md).
 
 Use **Settings → Content for Agents** to edit the site summary, About links,
 categories, featured posts, and additional resources. The site name and tagline
@@ -71,5 +74,5 @@ provide neutral defaults.
 ## Documentation
 
 - [Plugin behavior and extension contracts](docs/PLUGIN-GUIDE.md)
-- [Development and contributing](https://github.com/Automattic/content-for-agents/blob/trunk/docs/CONTRIBUTING.md)
+- [Development and contributing](docs/CONTRIBUTING.md)
 - [Attribution](docs/NOTICE.md)

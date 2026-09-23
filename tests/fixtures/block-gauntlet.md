@@ -42,6 +42,12 @@ SENTINEL-COLUMN-B column B.
 
 SENTINEL-DETAILS summary: Nested details paragraph.
 
+### SENTINEL-ACCORDION-QUESTION question
+
+SENTINEL-PANEL-ANSWER answer.
+
+SENTINEL-MATH x² + y² = z².
+
 ```
 SENTINEL-PREFORMATTED first line
 Second preformatted line.

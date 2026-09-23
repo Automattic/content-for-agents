@@ -22,6 +22,15 @@ The public behavior and supported extension contracts are documented in the
 - npm 10 or newer
 - Docker, OrbStack, or another Docker-compatible runtime for `wp-env`
 
+The local `wp-env` configuration runs WordPress 7.0 with PHP 8.2, matching the
+minimum supported runtime. CI runs PHP checks and unit tests with PHP 8.2
+through 8.5. It runs the integration suite on those PHP versions against the
+WordPress 7.0 and 7.1 branches and master.
+For branch protection, require the stable `PHP / Result`, `Frontend`, and
+`Integration / Result` checks. The PHP and Integration results pass only when
+every job in their respective matrices succeeds. In the Actions run view, each
+matrix and its result appear beneath the PHP or Integration caller.
+
 Composer and npm dependencies are development-only. WordPress supplies the
 runtime JavaScript packages, and the deployed plugin does not load Composer's
 autoloader.
@@ -36,9 +45,11 @@ npm run build
 npx wp-env start
 ```
 
-The development site is available at <http://localhost:8910>. Sign in at
+The development site is available at <http://localhost:8910> by default. If
+those ports are already in use, run `npx wp-env start --auto-port` and use the
+URL it prints. Sign in at
 `/wp-admin/` with the default `wp-env` credentials, username `admin` and
-password `password`. The WordPress test environment uses port `8911`.
+password `password`. The WordPress test environment uses port `8911` by default.
 
 Run `npx wp-env stop` when the environments are no longer needed. Generated
 settings assets, dependencies, test results, browser artifacts, and ZIP files
@@ -94,6 +105,7 @@ singular request. It does not perform direct post-ID fallback.
 | ---------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
 | PHP unit               | Isolated behavior that does not require WordPress                              | `composer test:unit`                         |
 | WordPress integration  | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`                   |
+| Frontend unit          | Settings UI behavior, search, and save state                                   | `npm run test:frontend`                      |
 | Frontend static checks | TypeScript types, linting, formatting, and settings compilation                | npm checks listed below                      |
 | Manual UI              | The settings screen and public Markdown output in a real browser               | Exercise the UI and public URLs in a browser |
 | VIP deployment         | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application         |
@@ -115,11 +127,11 @@ the complete set:
 composer validate --strict
 composer phpcs
 composer test:unit
+npm run test:frontend
 npm run typecheck
 npm run lint:js
 npm run format:check
 npm run build
-find . -path ./node_modules -prune -o -name '*.php' -print0 | xargs -0 -n1 php -l
 npx wp-env start
 npm run test:integration
 git diff --check

@@ -5,7 +5,7 @@
     "WP_DEVELOPMENT_MODE": "plugin",
     "WP_ENVIRONMENT_TYPE": "development"
   },
-  "core": "WordPress/WordPress#6.8-branch",
+  "core": "WordPress/WordPress#7.0-branch",
   "phpVersion": "8.2",
   "port": 8910,
   "testsPort": 8911,

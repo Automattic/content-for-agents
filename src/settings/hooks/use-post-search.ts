@@ -16,6 +16,13 @@ export default function usePostSearch( resolved: ResolvedPost[] ) {
 	const [ more, setMore ] = useState( false );
 	const [ loading, setLoading ] = useState( false );
 	const [ error, setError ] = useState( '' );
+	const setSearchQuery = ( value: string ) => {
+		setQuery( value );
+		setPage( 1 );
+		setResults( [] );
+		setMore( false );
+		setError( '' );
+	};
 	useEffect( () => {
 		const controller = new AbortController();
 		if ( ! query.trim() ) {
@@ -70,9 +77,8 @@ export default function usePostSearch( resolved: ResolvedPost[] ) {
 	return {
 		records,
 		query,
-		setQuery,
+		setSearchQuery,
 		results,
-		setResults,
 		page,
 		setPage,
 		more,

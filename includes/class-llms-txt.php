@@ -347,6 +347,7 @@ class LLMs_Txt {
 	 */
 	public static function send_headers(): void {
 		header( 'Content-Type: text/plain; charset=utf-8' );
+		send_nosniff_header();
 		header( 'X-Robots-Tag: noindex' );
 		header( 'Cache-Control: public, max-age=300, s-maxage=3600' );
 
