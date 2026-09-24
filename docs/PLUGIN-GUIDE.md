@@ -80,13 +80,23 @@ that WordPress would otherwise deny. Access-control integrations are responsible
 for invalidating the Markdown document and `/llms.txt` caches when their gating
 configuration changes.
 
-Output includes YAML metadata, the title, and converted content. Published
+Output includes YAML metadata, a single document title heading, and converted content. Published
 singular HTML pages advertise their alternate Markdown URL when supported. The
 front page advertises `/llms.txt`. The plugin preserves modern, nested, and
 legacy quotes, citations, lists, tables, links, images, and code. Audio and video
-sources become Markdown links, with captions retained. Link destinations escape
+sources and lite YouTube embeds become Markdown links, with captions retained.
+Core embeds use WordPress's resolved preview when available and retain their
+original URL when the preview contains no readable content. Link destinations escape
 parentheses and backslashes, and encode whitespace and angle brackets for
-Markdown syntax.
+Markdown syntax. Links nested inside inline code retain their code styling and
+destinations.
+Figures, captions, and following text stay inside their containing list item.
+When WordPress upgrades legacy same-site HTTP URLs to HTTPS in HTML content,
+Markdown applies the same core URL replacement.
+Visual line breaks inside HTML headings become spaces so the whole heading
+remains one Markdown heading.
+When rendered content begins with the document title as an H1, that heading
+is used instead of adding a duplicate title.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
@@ -94,6 +104,10 @@ WordPress 7.0 accordion headings become Markdown headings, their panels retain
 body text, and math block text is preserved.
 Classic Editor and other freeform post HTML use the same HTML conversion path,
 so the plugin does not require the Block Editor to be enabled.
+Buttons used as interface controls are omitted from Markdown. Buttons that
+label headings, such as accordion titles, retain their text. Visible status
+messages remain in the output, including widget loading messages when WordPress
+renders them in the article; code stays in a fenced block.
 Core post-title and post-excerpt blocks use the current post context. Direct
 `core/shortcode` blocks remain literal because conversion does not run
 `the_content`; other block render callbacks may still execute code.
@@ -104,7 +118,8 @@ block metadata and the callback precedence described below, and avoids mixing
 HTML presentation filters with Markdown authorization. Integrations should use
 `content_for_agents_pre_markdown` or `content_for_agents_after_markdown` for
 content transformations and `content_for_agents_can_serve_markdown` for access
-control.
+control. See [Site integrations](INTEGRATIONS.md) for a canonical URL retirement
+example.
 
 Markdown and `/llms.txt` responses include a `Content-Signal` header. Its
 `ai-train`, `search`, and `ai-input` values default to `yes` and can be
@@ -117,8 +132,11 @@ WordPress has resolved the post and any preview revision. `/llms.txt`
 compares the requested URL path with its home URL so it also works when plain
 permalinks leave the normalized request empty. This avoids activation-time
 rewrite-rule flushes, which are not reliable for VIP application-loaded
-plugins. Markdown paths use VIP's cached URL lookup in production, with a
-WordPress core fallback for local development. WordPress's `robots_txt` filter
+plugins. Markdown paths use VIP's cached URL lookup first. If it misses a
+nested page, WordPress's page-path lookup is used only when that page's
+permalink exactly matches the requested path. The existing access check still
+applies. Local development uses WordPress core URL lookup when VIP's API is
+unavailable. WordPress's `robots_txt` filter
 adds discovery where the platform permits it; VIP test-domain crawler
 restrictions still apply. Actual edge-cache refresh requires deployment
 verification.

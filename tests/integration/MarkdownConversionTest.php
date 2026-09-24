@@ -11,11 +11,22 @@ namespace Content_For_Agents\Tests\Integration;
 use Content_For_Agents\Block_Markdown_Registry;
 use Content_For_Agents\HTML_To_Markdown_Converter;
 use Content_For_Agents\Markdown_Converter;
+use Content_For_Agents\Markdown_Response;
 
 /**
  * Exercises Markdown conversion in WordPress.
  */
 class MarkdownConversionTest extends \WP_UnitTestCase {
+	/**
+	 * An article that renders its own title should have one H1 in Markdown.
+	 */
+	public function test_response_does_not_repeat_rendered_title_heading(): void {
+		$method = new \ReflectionMethod( Markdown_Response::class, 'get_title_heading' );
+
+		$this->assertSame( '', $method->invoke( null, 'Contact WordPress VIP', "# Contact WordPress VIP\n\nBody" ) );
+		$this->assertSame( "# Document title\n\n", $method->invoke( null, 'Document title', "# Different heading\n\nBody" ) );
+	}
+
 	/**
 	 * Number of metadata callback executions in the current test.
 	 *
@@ -54,6 +65,50 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( '**Hello agents**', $markdown );
+	}
+
+	/**
+	 * Markdown applies the same legacy same-site URL upgrade as HTML content.
+	 */
+	public function test_same_site_http_links_follow_wordpress_https_migration(): void {
+		$http_url  = home_url( '/get-a-demo', 'http' );
+		$https_url = home_url( '/get-a-demo', 'https' );
+		$content   = '<!-- wp:paragraph --><p><a href="' . esc_url( $http_url ) . '">Book a call</a></p><!-- /wp:paragraph -->';
+		$post_id   = self::factory()->post->create(
+			array(
+				'post_content' => $content,
+				'post_status'  => 'publish',
+			)
+		);
+		add_filter( 'wp_should_replace_insecure_home_url', '__return_true' );
+		try {
+			$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
+			$this->assertSame( '[Book a call](' . $https_url . ')', $markdown );
+		} finally {
+			remove_filter( 'wp_should_replace_insecure_home_url', '__return_true' );
+		}
+	}
+
+	/**
+	 * A figure inside a list item keeps its image attached to the marker.
+	 */
+	public function test_image_only_list_items_keep_their_markers(): void {
+		$html = '<ul><li><figure><img src="https://example.com/one.png" alt="One"></figure></li><li><figure><img src="https://example.com/two.png" alt="Two"></figure></li></ul>';
+		$this->assertSame(
+			"- ![One](https://example.com/one.png)\n- ![Two](https://example.com/two.png)",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Figure captions and following text stay inside their list item.
+	 */
+	public function test_figure_content_stays_within_list_item(): void {
+		$html = '<ol><li><figure><img src="https://example.com/a.jpg" alt="A"><figcaption>Caption</figcaption></figure>Image description</li><li>Next item</li></ol>';
+		$this->assertSame(
+			"1. ![A](https://example.com/a.jpg)\n   *Caption*\n   Image description\n2. Next item",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
 	}
 
 	/**
@@ -444,6 +499,155 @@ HTML;
 	}
 
 	/**
+	 * Buttons are controls except when they carry a heading's text.
+	 */
+	public function test_code_copy_control_does_not_appear_in_markdown(): void {
+		$html = '<div><button type="button" class="copy_code_hljs"><span>Copy Code</span></button><pre><code>echo "hello";</code></pre></div>'
+			. '<p>Before <button type="button">Share article</button> after.</p>'
+			. '<h3><button type="button" class="wp-block-accordion-heading__toggle">Supplies</button></h3>';
+
+		$this->assertSame(
+			"```\necho \"hello\";\n```\n\nBefore  after.\n\n### Supplies",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Skipped headings cannot change how later buttons are classified.
+	 */
+	public function test_hidden_heading_does_not_leave_heading_context_open(): void {
+		$html = '<h2 aria-hidden="true">Hidden</h2><p><button>Share</button>Visible</p>';
+		$this->assertSame( 'Visible', ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Visual line breaks do not split a Markdown heading.
+	 */
+	public function test_heading_line_break_keeps_entire_heading(): void {
+		$html = '<h2>What you can’t audit, <br>you can’t govern</h2><p>Details follow.</p>';
+		$this->assertSame(
+			"## What you can’t audit, you can’t govern\n\nDetails follow.",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+		$this->assertSame(
+			'## “Code for the People” is a clear-eyed take on the state of the internet.',
+			( new HTML_To_Markdown_Converter() )->convert( '<h2>“Code for the People” is a <br>clear-eyed take on the state <br>of the internet.</h2>' )
+		);
+	}
+
+	/**
+	 * Visible status content is preserved even when it may be a loading state.
+	 */
+	public function test_visible_status_content_remains_in_markdown(): void {
+		$html = '<div role="status" aria-live="polite"><span aria-hidden="true">Spinner</span>Service operational</div><p>Contact the team.</p>';
+		$this->assertSame( "Service operational\n\nContact the team.", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * A lite YouTube embed retains a usable video link without its play control.
+	 */
+	public function test_lite_youtube_embed_becomes_titled_link(): void {
+		$html = '<p>Watch the talk:</p><lite-youtube videoid="OqS03Ye4LgY" title="Shaping the Future of AI"><button class="lyt-playbtn"><span>Play Video: Shaping the Future of AI</span></button></lite-youtube><h2>Next</h2>';
+		$this->assertSame(
+			"Watch the talk:\n\n[Video: Shaping the Future of AI](https://www.youtube.com/watch?v=OqS03Ye4LgY)\n\n## Next",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * A video thumbnail remains available beside its playable link.
+	 */
+	public function test_lite_youtube_embed_keeps_thumbnail(): void {
+		$html = '<lite-youtube videoid="qNw3I0rtgeQ" title="NASA Chose WordPress VIP"><img src="https://example.com/nasa.jpg" alt="Rocket launch"><button class="lyt-playbtn">Play Video</button></lite-youtube>';
+		$this->assertSame(
+			"![Rocket launch](https://example.com/nasa.jpg)\n\n[Video: NASA Chose WordPress VIP](https://www.youtube.com/watch?v=qNw3I0rtgeQ)",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Video titles cannot add unintended Markdown links.
+	 */
+	public function test_lite_youtube_title_escapes_markdown_link_syntax(): void {
+		$html = '<lite-youtube videoid="OqS03Ye4LgY" title="A ](https://other.example) [B"></lite-youtube>';
+		$this->assertSame(
+			'[Video: A \\](https://other.example) \\[B](https://www.youtube.com/watch?v=OqS03Ye4LgY)',
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Core embeds use the same resolved preview title as the HTML article.
+	 */
+	public function test_core_embed_uses_resolved_preview(): void {
+		$url      = 'https://wordpress.org/news/2023/03/your-wordpress-6-2-preview/';
+		$callback = static function ( $result, $requested_url ) use ( $url ) {
+			if ( $url === $requested_url ) {
+				return '<blockquote><a href="' . esc_url( $url ) . '">Your WordPress 6.2 Preview</a></blockquote>';
+			}
+			return $result;
+		};
+		add_filter( 'pre_oembed_result', $callback, 10, 2 );
+		try {
+			$content = '<!-- wp:embed {"url":"' . $url . '","type":"rich","providerNameSlug":"wordpress-news"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $url . '</div></figure>'
+				. '<!-- /wp:embed -->';
+			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
+			$this->assertSame(
+				'> [Your WordPress 6.2 Preview](' . $url . ')',
+				( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post )
+			);
+		} finally {
+			remove_filter( 'pre_oembed_result', $callback, 10 );
+		}
+	}
+
+	/**
+	 * An iframe-only preview still retains the original media URL.
+	 */
+	public function test_core_embed_without_visible_preview_keeps_url(): void {
+		$url      = 'https://videopress.com/v/VblmBWq0';
+		$callback = static function ( $result, $requested_url ) use ( $url ) {
+			return $url === $requested_url ? '<iframe src="https://videopress.com/embed/VblmBWq0"></iframe>' : $result;
+		};
+		add_filter( 'pre_oembed_result', $callback, 10, 2 );
+		try {
+			$content = '<!-- wp:embed {"url":"' . $url . '","type":"video"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $url . '</div></figure>'
+				. '<!-- /wp:embed -->';
+			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
+			$this->assertSame( $url, ( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post ) );
+		} finally {
+			remove_filter( 'pre_oembed_result', $callback, 10 );
+		}
+	}
+
+	/**
+	 * A rich social embed retains its visible quote and links.
+	 */
+	public function test_core_embed_preserves_rich_quote(): void {
+		$url      = 'https://twitter.com/example/status/123456789';
+		$callback = static function ( $result, $requested_url ) use ( $url ) {
+			return $url === $requested_url
+				? '<blockquote><p>A useful quote <a href="https://example.com/source">source</a></p>— Example</blockquote>'
+				: $result;
+		};
+		add_filter( 'pre_oembed_result', $callback, 10, 2 );
+		try {
+			$content = '<!-- wp:embed {"url":"' . $url . '","type":"rich"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $url . '</div></figure>'
+				. '<!-- /wp:embed -->';
+			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
+			$this->assertSame(
+				"> A useful quote [source](https://example.com/source)\n>\n> — Example",
+				( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post )
+			);
+		} finally {
+			remove_filter( 'pre_oembed_result', $callback, 10 );
+		}
+	}
+
+	/**
 	 * Link destinations remain valid when source URLs contain parentheses.
 	 */
 	public function test_link_destinations_escape_parentheses(): void {
@@ -456,6 +660,17 @@ HTML;
 		$this->assertSame(
 			'[Backslash](https://example.com/a\\\\b) [Space](https://example.com/a%20b) [Angle](https://example.com/a%3Cb%3E)',
 			( new HTML_To_Markdown_Converter() )->convert( '<a href="https://example.com/a\\b">Backslash</a> <a href="https://example.com/a b">Space</a> <a href="https://example.com/a&lt;b&gt;">Angle</a>' )
+		);
+	}
+
+	/**
+	 * Links nested inside inline code retain their destinations and scope.
+	 */
+	public function test_links_inside_inline_code_keep_their_destinations(): void {
+		$html = '<p>Use <code><a href="https://example.com/option">option="true"</a></code> and <code>prefix<a href="https://example.com/value">value</a>suffix</code>.</p>';
+		$this->assertSame(
+			'Use [`option="true"`](https://example.com/option) and `prefix`[`value`](https://example.com/value)`suffix`.',
+			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 	}
 
@@ -515,6 +730,42 @@ HTML;
 	public function test_non_code_whitespace_is_normalized(): void {
 		$html = '<p>Hello </p><p>World</p><p>A<br><br><br>B</p>';
 		$this->assertSame( "Hello\n\nWorld\n\nA\n\nB", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Boundaries between quotes, lists, figures, code, and prose stay stable.
+	 */
+	public function test_mixed_document_boundaries_match_golden_markdown(): void {
+		$html = '<p>Intro</p><blockquote><p>Quoted line</p><cite>Editor</cite></blockquote>'
+			. '<ol start="9"><li><figure><img src="https://example.com/a.jpg" alt="A"><figcaption>Caption</figcaption></figure>After image</li><li>Next</li></ol>'
+			. "<pre><code>a\n  b</code></pre><p>Outro</p>";
+		$this->assertSame(
+			"Intro\n\n> Quoted line\n>\n> — Editor\n\n9. ![A](https://example.com/a.jpg)\n   *Caption*\n   After image\n10. Next\n\n```\na\n  b\n```\n\nOutro",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * A table between paragraphs keeps its rows and surrounding boundaries.
+	 */
+	public function test_table_between_paragraphs_matches_golden_markdown(): void {
+		$html = '<p>Before</p><table><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody><tr><td><strong>One</strong></td><td>Line 1<br>Line 2</td></tr></tbody></table><p>After</p>';
+		$this->assertSame(
+			"Before\n\n| Key | Value |\n| --- | --- |\n| **One** | Line 1<br>Line 2 |\n\nAfter",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Table cells and later conversions must not inherit document formatting state.
+	 */
+	public function test_conversion_context_is_isolated_between_cells_and_calls(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame(
+			"Before\n\n| Link | Code |\n| --- | --- |\n| [First](https://example.com/first) | `Second` |\n\nAfter",
+			$converter->convert( '<p>Before</p><table><tr><th>Link</th><th>Code</th></tr><tr><td><a href="https://example.com/first">First</a></td><td><code>Second</code></td></tr></table><p>After</p>' )
+		);
+		$this->assertSame( "Other\n\n> Quote\n>\n\nEnd", $converter->convert( '<p>Other</p><blockquote><p>Quote</p></blockquote><p>End</p>' ) );
 	}
 
 	/**

@@ -52,6 +52,7 @@ class Markdown_Response {
 		$cache_key = 'markdown_' . $post->ID;
 		$content   = $cacheable ? wp_cache_get( $cache_key, self::CACHE_GROUP ) : false;
 		$title     = html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$title     = trim( preg_replace( '/\s+/u', ' ', $title ) ?? $title );
 
 		if ( ! is_string( $content ) || '' === $content ) {
 			$converter   = new Markdown_Converter();
@@ -63,7 +64,7 @@ class Markdown_Response {
 			/** This filter is documented in class-markdown-response.php */
 			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
 
-			$content = $yaml . ( $title ? "# $title\n\n" : '' ) . $markdown_body;
+			$content = $yaml . self::get_title_heading( $title, $markdown_body ) . $markdown_body;
 
 			if ( $cacheable ) {
 				// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- CACHE_TTL is one hour.
@@ -85,6 +86,29 @@ class Markdown_Response {
 		// writing it so template rendering and later hooks cannot append output.
 		echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		exit;
+	}
+
+	/**
+	 * Add a document title only when the rendered body does not already begin
+	 * with that heading.
+	 *
+	 * @param string $title         Normalized document title.
+	 * @param string $markdown_body Rendered post content.
+	 * @return string Markdown heading or an empty string.
+	 */
+	private static function get_title_heading( string $title, string $markdown_body ): string {
+		if ( '' === $title ) {
+			return '';
+		}
+
+		if ( preg_match( '/\A# ([^\n]+)(?:\n|$)/u', $markdown_body, $matches ) ) {
+			$heading = trim( preg_replace( '/\s+/u', ' ', $matches[1] ) ?? $matches[1] );
+			if ( $title === $heading ) {
+				return '';
+			}
+		}
+
+		return "# $title\n\n";
 	}
 
 	/**

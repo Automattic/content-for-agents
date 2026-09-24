@@ -16,6 +16,16 @@ use Content_For_Agents\Markdown_Endpoint;
 class Testable_Markdown_Endpoint extends Markdown_Endpoint {
 
 	/**
+	 * Expose pretty-path post resolution.
+	 *
+	 * @param string $path Post path.
+	 * @return \WP_Post|null
+	 */
+	public function get_post_from_path_for_test( string $path ): ?\WP_Post {
+		return $this->get_post_from_path( $path );
+	}
+
+	/**
 	 * Expose the shared post eligibility check.
 	 *
 	 * @param \WP_Post $post Post object.

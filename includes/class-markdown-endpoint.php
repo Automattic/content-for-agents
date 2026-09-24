@@ -40,17 +40,43 @@ class Markdown_Endpoint {
 			return;
 		}
 
-		$post_id = $this->url_to_post_id( home_url( '/' . $post_path . '/' ) );
-		if ( ! $post_id ) {
-			$post_id = $this->url_to_post_id( home_url( '/' . $post_path ) );
-		}
-
-		$post = $post_id ? get_post( $post_id ) : null;
+		$post = $this->get_post_from_path( $post_path );
 		if ( ! $post instanceof \WP_Post || ! $this->can_serve( $post ) ) {
 			return;
 		}
 
 		Markdown_Response::serve( $post );
+	}
+
+	/**
+	 * Resolve a Markdown path with VIP lookup, then verify a nested page path.
+	 *
+	 * Some hierarchical page URLs can be served by WordPress while URL-to-post
+	 * lookup misses them. The page fallback only accepts an exact canonical URL.
+	 *
+	 * @param string $post_path Post path without the Markdown suffix.
+	 * @return \WP_Post|null Resolved post.
+	 */
+	protected function get_post_from_path( string $post_path ): ?\WP_Post {
+		$post_id = $this->url_to_post_id( home_url( '/' . $post_path . '/' ) );
+		if ( ! $post_id ) {
+			$post_id = $this->url_to_post_id( home_url( '/' . $post_path ) );
+		}
+		$post = $post_id ? get_post( $post_id ) : null;
+		if ( $post instanceof \WP_Post ) {
+			return $post;
+		}
+		if ( ! str_contains( $post_path, '/' ) ) {
+			return null;
+		}
+		$page = get_page_by_path( $post_path, OBJECT, 'page' );
+		if ( ! $page instanceof \WP_Post ) {
+			return null;
+		}
+		$permalink = get_permalink( $page );
+		return is_string( $permalink ) && untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' . $post_path . '/' ) )
+			? $page
+			: null;
 	}
 
 	/**
