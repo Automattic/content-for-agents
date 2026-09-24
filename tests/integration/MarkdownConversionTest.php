@@ -733,6 +733,30 @@ HTML;
 	}
 
 	/**
+	 * Boundaries between quotes, lists, figures, code, and prose stay stable.
+	 */
+	public function test_mixed_document_boundaries_match_golden_markdown(): void {
+		$html = '<p>Intro</p><blockquote><p>Quoted line</p><cite>Editor</cite></blockquote>'
+			. '<ol start="9"><li><figure><img src="https://example.com/a.jpg" alt="A"><figcaption>Caption</figcaption></figure>After image</li><li>Next</li></ol>'
+			. "<pre><code>a\n  b</code></pre><p>Outro</p>";
+		$this->assertSame(
+			"Intro\n\n> Quoted line\n>\n> — Editor\n\n9. ![A](https://example.com/a.jpg)\n   *Caption*\n   After image\n10. Next\n\n```\na\n  b\n```\n\nOutro",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * A table between paragraphs keeps its rows and surrounding boundaries.
+	 */
+	public function test_table_between_paragraphs_matches_golden_markdown(): void {
+		$html = '<p>Before</p><table><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody><tr><td><strong>One</strong></td><td>Line 1<br>Line 2</td></tr></tbody></table><p>After</p>';
+		$this->assertSame(
+			"Before\n\n| Key | Value |\n| --- | --- |\n| **One** | Line 1<br>Line 2 |\n\nAfter",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
 	 * Ordinary ordered siblings keep their position around an authoritative callback.
 	 */
 	public function test_ordered_list_keeps_fallback_markers_around_callback(): void {
