@@ -8,7 +8,7 @@
 namespace Content_For_Agents;
 
 /**
- * Keeps document and table-cell conversion state separate.
+ * Holds conversion state for one document or one table cell.
  */
 final class Markdown_Conversion_Context {
 	public string $output        = '';

@@ -3,7 +3,7 @@
 /**
  * HTML-to-Markdown converter.
  *
- * This is a local copy of the converter developed in the WordPress/ai
+ * This converter is derived from the one developed in the WordPress/ai
  * Markdown Feeds experiment (PR #194):
  *
  * @see https://github.com/WordPress/ai/pull/194

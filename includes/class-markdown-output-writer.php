@@ -11,7 +11,7 @@ declare( strict_types=1 );
 namespace Content_For_Agents;
 
 /**
- * Applies the same line, quote, and whitespace rules to documents and cells.
+ * Applies line, quote, and whitespace rules to caller-owned output state.
  */
 final class Markdown_Output_Writer {
 	/**
