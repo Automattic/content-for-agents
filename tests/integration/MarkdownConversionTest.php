@@ -757,6 +757,18 @@ HTML;
 	}
 
 	/**
+	 * Table cells and later conversions must not inherit document formatting state.
+	 */
+	public function test_conversion_context_is_isolated_between_cells_and_calls(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame(
+			"Before\n\n| Link | Code |\n| --- | --- |\n| [First](https://example.com/first) | `Second` |\n\nAfter",
+			$converter->convert( '<p>Before</p><table><tr><th>Link</th><th>Code</th></tr><tr><td><a href="https://example.com/first">First</a></td><td><code>Second</code></td></tr></table><p>After</p>' )
+		);
+		$this->assertSame( "Other\n\n> Quote\n>\n\nEnd", $converter->convert( '<p>Other</p><blockquote><p>Quote</p></blockquote><p>End</p>' ) );
+	}
+
+	/**
 	 * Ordinary ordered siblings keep their position around an authoritative callback.
 	 */
 	public function test_ordered_list_keeps_fallback_markers_around_callback(): void {

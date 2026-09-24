@@ -111,7 +111,7 @@ final class HTML_To_Markdown_Converter {
 	 * @return string Markdown output.
 	 */
 	private function convert_with_processor( $processor ): string {
-		$document      = $this->create_context();
+		$document      = new Markdown_Conversion_Context();
 		$table_state   = array(
 			'cell'            => null,
 			'depth'           => 0,
@@ -179,25 +179,20 @@ final class HTML_To_Markdown_Converter {
 				}
 				if ( $link ) {
 					$context = null !== $table_state['cell'] ? $table_state['cell'] : $document;
-					$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-					$this->writer->append_text( $context['output'], $link, $context['at_line_start'], $context['blockquote_depth'], true );
-					$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-					if ( null !== $table_state['cell'] ) {
-						$table_state['cell'] = $context;
-					} else {
-						$document = $context;
-					}
+					$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+					$this->writer->append_text( $context->output, $link, $context->at_line_start, $context->blockquote_depth, true );
+					$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 				}
 				continue;
 			}
 
 			if ( $is_tag && 'BR' === $token_name && 0 < $heading_depth ) {
 				if ( null !== $table_state['cell'] ) {
-					$table_state['cell']['output'] = rtrim( $table_state['cell']['output'], " \t" );
-					$this->writer->append_text( $table_state['cell']['output'], ' ', $table_state['cell']['at_line_start'], $table_state['cell']['blockquote_depth'], true );
+					$table_state['cell']->output = rtrim( $table_state['cell']->output, " \t" );
+					$this->writer->append_text( $table_state['cell']->output, ' ', $table_state['cell']->at_line_start, $table_state['cell']->blockquote_depth, true );
 				} else {
-					$document['output'] = rtrim( $document['output'], " \t" );
-					$this->writer->append_text( $document['output'], ' ', $document['at_line_start'], $document['blockquote_depth'], true );
+					$document->output = rtrim( $document->output, " \t" );
+					$this->writer->append_text( $document->output, ' ', $document->at_line_start, $document->blockquote_depth, true );
 				}
 				continue;
 			}
@@ -214,7 +209,7 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		$this->flush_code( $document );
-		return $document['output'];
+		return $document->output;
 	}
 
 	/**
@@ -222,31 +217,31 @@ final class HTML_To_Markdown_Converter {
 	 *
 	 * @param WP_HTML_Tag_Processor|WP_HTML_Processor $processor   Current processor.
 	 * @param string|null                            $token_name  Current token name.
-	 * @param array                                  $document    Document context (by reference).
+	 * @param Markdown_Conversion_Context $document Document context.
 	 * @param array                                  $table_state Table context (by reference).
 	 * @return bool Whether the token was consumed as table structure.
 	 */
-	private function handle_table_token( $processor, ?string $token_name, array &$document, array &$table_state ): bool {
+	private function handle_table_token( $processor, ?string $token_name, Markdown_Conversion_Context $document, array &$table_state ): bool {
 		$is_closer = $processor->is_tag_closer();
 		if ( 'TABLE' === $token_name ) {
 			if ( ! $is_closer ) {
 				if ( 0 === $table_state['depth'] ) {
-					$this->writer->ensure_blank_line( $document['output'], $document['at_line_start'], $document['blockquote_depth'] );
+					$this->writer->ensure_blank_line( $document->output, $document->at_line_start, $document->blockquote_depth );
 				} elseif ( null !== $table_state['cell'] ) {
-					$this->writer->append_newline( $table_state['cell']['output'], $table_state['cell']['at_line_start'] );
+					$this->writer->append_newline( $table_state['cell']->output, $table_state['cell']->at_line_start );
 				}
 				++$table_state['depth'];
 			} elseif ( 1 < $table_state['depth'] ) {
 				--$table_state['depth'];
 				if ( null !== $table_state['cell'] ) {
-					$this->writer->append_newline( $table_state['cell']['output'], $table_state['cell']['at_line_start'] );
+					$this->writer->append_newline( $table_state['cell']->output, $table_state['cell']->at_line_start );
 				}
 			} elseif ( 1 === $table_state['depth'] ) {
 				$this->close_table_cell( $table_state['cell'], $table_state['current_row'] );
 				$this->emit_table_row( $document, $table_state['current_row'], $table_state['is_header_row'], $table_state['header_row_done'] );
 				$table_state['depth']           = 0;
 				$table_state['header_row_done'] = false;
-				$this->writer->ensure_blank_line( $document['output'], $document['at_line_start'], $document['blockquote_depth'] );
+				$this->writer->ensure_blank_line( $document->output, $document->at_line_start, $document->blockquote_depth );
 			}
 			return true;
 		}
@@ -256,7 +251,7 @@ final class HTML_To_Markdown_Converter {
 			// Flatten nested tables into the outer cell. Nested cell and row
 			// boundaries become line boundaries in that cell.
 			if ( $is_closer && null !== $table_state['cell'] && in_array( $token_name, array( 'TH', 'TD', 'TR' ), true ) ) {
-				$this->writer->append_newline( $table_state['cell']['output'], $table_state['cell']['at_line_start'] );
+				$this->writer->append_newline( $table_state['cell']->output, $table_state['cell']->at_line_start );
 			}
 			return true;
 		}
@@ -272,7 +267,7 @@ final class HTML_To_Markdown_Converter {
 		if ( 1 === $table_state['depth'] && ( 'TH' === $token_name || 'TD' === $token_name ) ) {
 			if ( ! $is_closer ) {
 				$this->close_table_cell( $table_state['cell'], $table_state['current_row'] );
-				$table_state['cell'] = $this->create_context();
+				$table_state['cell'] = new Markdown_Conversion_Context();
 				if ( 'TH' === $token_name ) {
 					$table_state['is_header_row'] = true;
 				}
@@ -298,50 +293,28 @@ final class HTML_To_Markdown_Converter {
 	}
 
 	/**
-	 * Creates an isolated Markdown conversion context.
-	 *
-	 * @return array Conversion context.
-	 */
-	private function create_context(): array {
-		return array(
-			'output'            => '',
-			'at_line_start'     => true,
-			'blockquote_depth'  => 0,
-			'in_pre'            => false,
-			'pre_code'          => null,
-			'inline_code'       => null,
-			'inline_code_parts' => array(),
-			'inline_code_link'  => null,
-			'link_stack'        => array(),
-			'last_link_end'     => null,
-			'list_stack'        => array(),
-			'media_stack'       => array(),
-		);
-	}
-
-	/**
 	 * Converts a non-table-structural token into a context.
 	 *
 	 * @param WP_HTML_Tag_Processor|WP_HTML_Processor $processor  Processor instance.
 	 * @param string|null                            $token_name Current token name.
-	 * @param array                                  $context    Conversion context (by reference).
+	 * @param Markdown_Conversion_Context $context Conversion context.
 	 */
-	private function convert_token( $processor, ?string $token_name, array &$context ): void {
+	private function convert_token( $processor, ?string $token_name, Markdown_Conversion_Context $context ): void {
 		if ( '#text' === $token_name ) {
-			if ( null !== $context['pre_code'] ) {
-				$context['pre_code'] .= (string) $processor->get_modifiable_text();
+			if ( null !== $context->pre_code ) {
+				$context->pre_code .= (string) $processor->get_modifiable_text();
 				return;
 			}
-			if ( null !== $context['inline_code'] ) {
-				$context['inline_code'] .= (string) $processor->get_modifiable_text();
+			if ( null !== $context->inline_code ) {
+				$context->inline_code .= (string) $processor->get_modifiable_text();
 				return;
 			}
 			$this->writer->append_text(
-				$context['output'],
+				$context->output,
 				(string) $processor->get_modifiable_text(),
-				$context['at_line_start'],
-				$context['blockquote_depth'],
-				$context['in_pre']
+				$context->at_line_start,
+				$context->blockquote_depth,
+				$context->in_pre
 			);
 			return;
 		}
@@ -352,51 +325,51 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		$is_closer = $processor->is_tag_closer();
-		if ( null !== $context['pre_code'] && 'PRE' !== $token_name ) {
+		if ( null !== $context->pre_code && 'PRE' !== $token_name ) {
 			if ( 'BR' === $token_name ) {
-				$context['pre_code'] .= "\n";
+				$context->pre_code .= "\n";
 			}
 			return;
 		}
-		if ( null !== $context['inline_code'] && 'CODE' !== $token_name ) {
+		if ( null !== $context->inline_code && 'CODE' !== $token_name ) {
 			if ( 'BR' === $token_name ) {
-				$context['inline_code'] .= "\n";
+				$context->inline_code .= "\n";
 			} elseif ( 'A' === $token_name ) {
-				if ( '' !== $context['inline_code'] ) {
-					$context['inline_code_parts'][] = array( $context['inline_code'], $context['inline_code_link'] );
-					$context['inline_code']         = '';
+				if ( '' !== $context->inline_code ) {
+					$context->inline_code_parts[] = array( $context->inline_code, $context->inline_code_link );
+					$context->inline_code         = '';
 				}
-				$context['inline_code_link'] = $is_closer ? null : (string) $processor->get_attribute( 'href' );
+				$context->inline_code_link = $is_closer ? null : (string) $processor->get_attribute( 'href' );
 			}
 			return;
 		}
 
 		if ( 'BR' === $token_name ) {
-			$this->writer->append_newline( $context['output'], $context['at_line_start'], $context['in_pre'] );
+			$this->writer->append_newline( $context->output, $context->at_line_start, $context->in_pre );
 			return;
 		}
 
 		if ( 'HR' === $token_name && ! $is_closer ) {
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-			$this->writer->append_line( $context['output'], '---', $context['at_line_start'], $context['blockquote_depth'] );
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+			$this->writer->append_line( $context->output, '---', $context->at_line_start, $context->blockquote_depth );
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 			return;
 		}
 
 		if ( ( 'P' === $token_name || 'DIV' === $token_name ) && $is_closer ) {
-			if ( ! $context['in_pre'] ) {
-				$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+			if ( ! $context->in_pre ) {
+				$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 			}
 			return;
 		}
 
 		if ( 'BLOCKQUOTE' === $token_name ) {
 			if ( $is_closer ) {
-				$context['blockquote_depth'] = max( 0, $context['blockquote_depth'] - 1 );
-				$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+				$context->blockquote_depth = max( 0, $context->blockquote_depth - 1 );
+				$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 			} else {
-				$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-				++$context['blockquote_depth'];
+				$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+				++$context->blockquote_depth;
 			}
 			return;
 		}
@@ -405,17 +378,17 @@ final class HTML_To_Markdown_Converter {
 			if ( $is_closer ) {
 				$this->flush_code( $context );
 			} else {
-				$context['pre_code'] = '';
-				$context['in_pre']   = true;
+				$context->pre_code = '';
+				$context->in_pre   = true;
 			}
 			return;
 		}
 
-		if ( 'CODE' === $token_name && ! $context['in_pre'] ) {
+		if ( 'CODE' === $token_name && ! $context->in_pre ) {
 			if ( ! $is_closer ) {
-				$context['inline_code']       = '';
-				$context['inline_code_parts'] = array();
-				$context['inline_code_link']  = null;
+				$context->inline_code       = '';
+				$context->inline_code_parts = array();
+				$context->inline_code_link  = null;
 				return;
 			}
 
@@ -424,26 +397,26 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		if ( 'STRONG' === $token_name || 'B' === $token_name ) {
-			$this->writer->append_text( $context['output'], '**', $context['at_line_start'], $context['blockquote_depth'], true );
+			$this->writer->append_text( $context->output, '**', $context->at_line_start, $context->blockquote_depth, true );
 			return;
 		}
 
 		if ( 'EM' === $token_name || 'I' === $token_name ) {
-			$this->writer->append_text( $context['output'], '*', $context['at_line_start'], $context['blockquote_depth'], true );
+			$this->writer->append_text( $context->output, '*', $context->at_line_start, $context->blockquote_depth, true );
 			return;
 		}
 
 		if ( 'A' === $token_name ) {
 			if ( $is_closer ) {
-				$href = array_pop( $context['link_stack'] );
-				$this->writer->append_text( $context['output'], $href ? '](' . $this->writer->escape_markdown_destination( $href ) . ')' : ']', $context['at_line_start'], $context['blockquote_depth'], true );
-				$context['last_link_end'] = strlen( $context['output'] );
+				$href = array_pop( $context->link_stack );
+				$this->writer->append_text( $context->output, $href ? '](' . $this->writer->escape_markdown_destination( $href ) . ')' : ']', $context->at_line_start, $context->blockquote_depth, true );
+				$context->last_link_end = strlen( $context->output );
 			} else {
-				if ( strlen( $context['output'] ) === $context['last_link_end'] && ! $context['at_line_start'] ) {
-					$this->writer->append_text( $context['output'], ' ', $context['at_line_start'], $context['blockquote_depth'], true );
+				if ( strlen( $context->output ) === $context->last_link_end && ! $context->at_line_start ) {
+					$this->writer->append_text( $context->output, ' ', $context->at_line_start, $context->blockquote_depth, true );
 				}
-				$context['link_stack'][] = (string) $processor->get_attribute( 'href' );
-				$this->writer->append_text( $context['output'], '[', $context['at_line_start'], $context['blockquote_depth'], true );
+				$context->link_stack[] = (string) $processor->get_attribute( 'href' );
+				$this->writer->append_text( $context->output, '[', $context->at_line_start, $context->blockquote_depth, true );
 			}
 			return;
 		}
@@ -452,34 +425,34 @@ final class HTML_To_Markdown_Converter {
 			$src = (string) $processor->get_attribute( 'src' );
 			if ( '' !== $src ) {
 				$alt = (string) $processor->get_attribute( 'alt' );
-				$this->writer->append_text( $context['output'], '![' . $this->writer->escape_markdown_link_text( $alt ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->writer->append_text( $context->output, '![' . $this->writer->escape_markdown_link_text( $alt ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context->at_line_start, $context->blockquote_depth, true );
 			}
 			return;
 		}
 
 		if ( 'AUDIO' === $token_name || 'VIDEO' === $token_name ) {
 			if ( $is_closer ) {
-				array_pop( $context['media_stack'] );
+				array_pop( $context->media_stack );
 			} else {
 				$src = (string) $processor->get_attribute( 'src' );
 
-				$context['media_stack'][] = array(
+				$context->media_stack[] = array(
 					'type'    => $token_name,
 					'has_src' => '' !== $src,
 				);
 				if ( '' !== $src ) {
-					$this->writer->append_text( $context['output'], '[' . ucfirst( strtolower( $token_name ) ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+					$this->writer->append_text( $context->output, '[' . ucfirst( strtolower( $token_name ) ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context->at_line_start, $context->blockquote_depth, true );
 				}
 			}
 			return;
 		}
 
-		if ( 'SOURCE' === $token_name && ! $is_closer && ! empty( $context['media_stack'] ) ) {
-			$index = count( $context['media_stack'] ) - 1;
+		if ( 'SOURCE' === $token_name && ! $is_closer && ! empty( $context->media_stack ) ) {
+			$index = count( $context->media_stack ) - 1;
 			$src   = (string) $processor->get_attribute( 'src' );
-			if ( ! $context['media_stack'][ $index ]['has_src'] && '' !== $src ) {
-				$this->writer->append_text( $context['output'], '[' . ucfirst( strtolower( $context['media_stack'][ $index ]['type'] ) ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
-				$context['media_stack'][ $index ]['has_src'] = true;
+			if ( ! $context->media_stack[ $index ]['has_src'] && '' !== $src ) {
+				$this->writer->append_text( $context->output, '[' . ucfirst( strtolower( $context->media_stack[ $index ]['type'] ) ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context->at_line_start, $context->blockquote_depth, true );
+				$context->media_stack[ $index ]['has_src'] = true;
 			}
 			return;
 		}
@@ -491,7 +464,7 @@ final class HTML_To_Markdown_Converter {
 				}
 				return;
 			}
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 			return;
 		}
 
@@ -500,69 +473,69 @@ final class HTML_To_Markdown_Converter {
 				if ( $this->has_active_list_item( $context ) ) {
 					$this->append_list_continuation( $context );
 				} else {
-					$this->writer->ensure_newline( $context['output'], $context['at_line_start'] );
+					$this->writer->ensure_newline( $context->output, $context->at_line_start );
 				}
-				$this->writer->append_text( $context['output'], '*', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->writer->append_text( $context->output, '*', $context->at_line_start, $context->blockquote_depth, true );
 			} else {
-				$context['output'] .= '*';
+				$context->output .= '*';
 			}
 			return;
 		}
 
 		if ( 'CITE' === $token_name ) {
 			if ( ! $is_closer ) {
-				if ( 0 < $context['blockquote_depth'] ) {
-					$this->writer->ensure_newline( $context['output'], $context['at_line_start'] );
+				if ( 0 < $context->blockquote_depth ) {
+					$this->writer->ensure_newline( $context->output, $context->at_line_start );
 				}
-				$this->writer->append_text( $context['output'], '— ', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->writer->append_text( $context->output, '— ', $context->at_line_start, $context->blockquote_depth, true );
 			}
 			return;
 		}
 
 		if ( 'UL' === $token_name || 'OL' === $token_name ) {
 			if ( $is_closer ) {
-				array_pop( $context['list_stack'] );
-				$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+				array_pop( $context->list_stack );
+				$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 			} else {
 				$start = 'OL' === $token_name ? $processor->get_attribute( 'start' ) : null;
 
-				$context['list_stack'][] = array(
+				$context->list_stack[] = array(
 					'type'                => $token_name,
 					'index'               => null !== $start ? (int) $start - 1 : 0,
 					'continuation_indent' => null,
 				);
-				$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+				$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 			}
 			return;
 		}
 
 		if ( 'LI' === $token_name && ! $is_closer ) {
-			$this->writer->ensure_newline( $context['output'], $context['at_line_start'] );
+			$this->writer->ensure_newline( $context->output, $context->at_line_start );
 
-			$depth  = count( $context['list_stack'] );
+			$depth  = count( $context->list_stack );
 			$indent = str_repeat( '  ', max( 0, $depth - 1 ) );
 			$marker = '-';
-			if ( 0 < $depth && 'OL' === $context['list_stack'][ $depth - 1 ]['type'] ) {
-				++$context['list_stack'][ $depth - 1 ]['index'];
-				$marker = (string) $context['list_stack'][ $depth - 1 ]['index'] . '.';
+			if ( 0 < $depth && 'OL' === $context->list_stack[ $depth - 1 ]['type'] ) {
+				++$context->list_stack[ $depth - 1 ]['index'];
+				$marker = (string) $context->list_stack[ $depth - 1 ]['index'] . '.';
 			}
 
-			$this->writer->append_text( $context['output'], $indent . $marker . ' ', $context['at_line_start'], $context['blockquote_depth'], true );
+			$this->writer->append_text( $context->output, $indent . $marker . ' ', $context->at_line_start, $context->blockquote_depth, true );
 			if ( 0 < $depth ) {
-				$context['list_stack'][ $depth - 1 ]['continuation_indent'] = str_repeat( ' ', strlen( $indent . $marker . ' ' ) );
+				$context->list_stack[ $depth - 1 ]['continuation_indent'] = str_repeat( ' ', strlen( $indent . $marker . ' ' ) );
 			}
 			return;
 		}
 
 		if ( 'LI' === $token_name && $is_closer ) {
-			$depth = count( $context['list_stack'] );
+			$depth = count( $context->list_stack );
 			if ( 0 < $depth ) {
-				$indent = $context['list_stack'][ $depth - 1 ]['continuation_indent'];
-				if ( null !== $indent && str_ends_with( $context['output'], "\n" . $indent ) ) {
-					$context['output']        = substr( $context['output'], 0, -strlen( $indent ) );
-					$context['at_line_start'] = true;
+				$indent = $context->list_stack[ $depth - 1 ]['continuation_indent'];
+				if ( null !== $indent && str_ends_with( $context->output, "\n" . $indent ) ) {
+					$context->output        = substr( $context->output, 0, -strlen( $indent ) );
+					$context->at_line_start = true;
 				}
-				$context['list_stack'][ $depth - 1 ]['continuation_indent'] = null;
+				$context->list_stack[ $depth - 1 ]['continuation_indent'] = null;
 			}
 			return;
 		}
@@ -572,52 +545,52 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		if ( $is_closer ) {
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
 		} else {
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-			$this->writer->append_text( $context['output'], str_repeat( '#', (int) $matches[1] ) . ' ', $context['at_line_start'], $context['blockquote_depth'], true );
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+			$this->writer->append_text( $context->output, str_repeat( '#', (int) $matches[1] ) . ' ', $context->at_line_start, $context->blockquote_depth, true );
 		}
 	}
 
 	/**
 	 * Finalizes the active table cell into the current row.
 	 *
-	 * @param array|null $cell        Active cell context (by reference).
+	 * @param Markdown_Conversion_Context|null $cell Active cell context (by reference).
 	 * @param array      $current_row Current table row (by reference).
 	 */
-	private function close_table_cell( ?array &$cell, array &$current_row ): void {
+	private function close_table_cell( ?Markdown_Conversion_Context &$cell, array &$current_row ): void {
 		if ( null === $cell ) {
 			return;
 		}
 
 		$this->flush_code( $cell );
-		$current_row[] = $this->format_table_cell( $cell['output'] );
+		$current_row[] = $this->format_table_cell( $cell->output );
 		$cell          = null;
 	}
 
 	/**
 	 * Emits the current table row and an optional header separator.
 	 *
-	 * @param array $document        Document conversion context (by reference).
+	 * @param Markdown_Conversion_Context $document Document conversion context.
 	 * @param array $current_row     Current table row (by reference).
 	 * @param bool  $is_header_row   Whether the row contains header cells (by reference).
 	 * @param bool  $header_row_done Whether a header row has been emitted (by reference).
 	 */
-	private function emit_table_row( array &$document, array &$current_row, bool &$is_header_row, bool &$header_row_done ): void {
+	private function emit_table_row( Markdown_Conversion_Context $document, array &$current_row, bool &$is_header_row, bool &$header_row_done ): void {
 		if ( ! empty( $current_row ) ) {
 			$this->writer->append_line(
-				$document['output'],
+				$document->output,
 				'| ' . implode( ' | ', $current_row ) . ' |',
-				$document['at_line_start'],
-				$document['blockquote_depth']
+				$document->at_line_start,
+				$document->blockquote_depth
 			);
 
 			if ( $is_header_row && ! $header_row_done ) {
 				$this->writer->append_line(
-					$document['output'],
+					$document->output,
 					'|' . str_repeat( ' --- |', count( $current_row ) ),
-					$document['at_line_start'],
-					$document['blockquote_depth']
+					$document->at_line_start,
+					$document->blockquote_depth
 				);
 				$header_row_done = true;
 			}
@@ -678,63 +651,63 @@ final class HTML_To_Markdown_Converter {
 	/**
 	 * Emit complete or unclosed code content from a conversion context.
 	 *
-	 * @param array $context Conversion context (by reference).
+	 * @param Markdown_Conversion_Context $context Conversion context.
 	 */
-	private function flush_code( array &$context ): void {
-		if ( null !== $context['pre_code'] ) {
-			$content = (string) $context['pre_code'];
+	private function flush_code( Markdown_Conversion_Context $context ): void {
+		if ( null !== $context->pre_code ) {
+			$content = (string) $context->pre_code;
 			$fence   = $this->writer->code_delimiter( $content, 3 );
 
-			$context['pre_code'] = null;
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-			$this->writer->append_line( $context['output'], $fence, $context['at_line_start'], $context['blockquote_depth'] );
-			$this->writer->append_text( $context['output'], $content, $context['at_line_start'], $context['blockquote_depth'], true );
-			if ( ! $context['at_line_start'] ) {
-				$this->writer->append_newline( $context['output'], $context['at_line_start'], true );
+			$context->pre_code = null;
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+			$this->writer->append_line( $context->output, $fence, $context->at_line_start, $context->blockquote_depth );
+			$this->writer->append_text( $context->output, $content, $context->at_line_start, $context->blockquote_depth, true );
+			if ( ! $context->at_line_start ) {
+				$this->writer->append_newline( $context->output, $context->at_line_start, true );
 			}
-			$this->writer->append_line( $context['output'], $fence, $context['at_line_start'], $context['blockquote_depth'] );
-			$this->writer->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
-			$context['in_pre'] = false;
+			$this->writer->append_line( $context->output, $fence, $context->at_line_start, $context->blockquote_depth );
+			$this->writer->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+			$context->in_pre = false;
 		}
 
-		if ( null !== $context['inline_code'] ) {
-			if ( '' !== $context['inline_code'] || empty( $context['inline_code_parts'] ) ) {
-				$context['inline_code_parts'][] = array( $context['inline_code'], $context['inline_code_link'] );
+		if ( null !== $context->inline_code ) {
+			if ( '' !== $context->inline_code || empty( $context->inline_code_parts ) ) {
+				$context->inline_code_parts[] = array( $context->inline_code, $context->inline_code_link );
 			}
 			$rendered = '';
-			foreach ( $context['inline_code_parts'] as $part ) {
+			foreach ( $context->inline_code_parts as $part ) {
 				$span      = $this->writer->inline_code_span( (string) $part[0] );
 				$rendered .= $part[1] ? '[' . $span . '](' . $this->writer->escape_markdown_destination( $part[1] ) . ')' : $span;
 			}
-			$context['inline_code']       = null;
-			$context['inline_code_parts'] = array();
-			$context['inline_code_link']  = null;
-			$this->writer->append_text( $context['output'], $rendered, $context['at_line_start'], $context['blockquote_depth'], true );
+			$context->inline_code       = null;
+			$context->inline_code_parts = array();
+			$context->inline_code_link  = null;
+			$this->writer->append_text( $context->output, $rendered, $context->at_line_start, $context->blockquote_depth, true );
 		}
 	}
 
 	/**
 	 * Whether conversion is currently inside a list item.
 	 *
-	 * @param array $context Conversion context.
+	 * @param Markdown_Conversion_Context $context Conversion context.
 	 * @return bool Whether a list item is active.
 	 */
-	private function has_active_list_item( array $context ): bool {
-		if ( empty( $context['list_stack'] ) ) {
+	private function has_active_list_item( Markdown_Conversion_Context $context ): bool {
+		if ( empty( $context->list_stack ) ) {
 			return false;
 		}
-		$last = $context['list_stack'][ count( $context['list_stack'] ) - 1 ];
+		$last = $context->list_stack[ count( $context->list_stack ) - 1 ];
 		return null !== $last['continuation_indent'];
 	}
 
 	/**
 	 * Continue a block element within its containing Markdown list item.
 	 *
-	 * @param array $context Conversion context (by reference).
+	 * @param Markdown_Conversion_Context $context Conversion context.
 	 */
-	private function append_list_continuation( array &$context ): void {
-		$last = $context['list_stack'][ count( $context['list_stack'] ) - 1 ];
-		$this->writer->ensure_newline( $context['output'], $context['at_line_start'] );
-		$this->writer->append_text( $context['output'], $last['continuation_indent'], $context['at_line_start'], $context['blockquote_depth'], true );
+	private function append_list_continuation( Markdown_Conversion_Context $context ): void {
+		$last = $context->list_stack[ count( $context->list_stack ) - 1 ];
+		$this->writer->ensure_newline( $context->output, $context->at_line_start );
+		$this->writer->append_text( $context->output, $last['continuation_indent'], $context->at_line_start, $context->blockquote_depth, true );
 	}
 }
