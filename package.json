@@ -10,6 +10,7 @@
     "LICENSE",
     "docs/NOTICE.md",
     "docs/PLUGIN-GUIDE.md",
+    "docs/INTEGRATIONS.md",
     "README.md"
   ],
   "scripts": {

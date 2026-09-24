@@ -26,11 +26,11 @@ export default function Categories( {
 					? __(
 							'Automatic: includes top-level categories with published posts.',
 							'content-for-agents'
-						)
+					  )
 					: __(
 							'Custom selection: includes the selected top-level categories.',
 							'content-for-agents'
-						)
+					  )
 			}
 		>
 			{ categories.map( term => (

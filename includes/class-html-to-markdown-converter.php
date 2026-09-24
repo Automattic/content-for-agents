@@ -105,6 +105,8 @@ final class HTML_To_Markdown_Converter {
 		$is_header_row   = false;
 		$header_row_done = false;
 		$hidden_stack    = array();
+		$heading_depth   = 0;
+		$video_stack     = array();
 
 		while ( $processor->next_token() ) {
 			$token_name = $processor->get_token_name();
@@ -133,12 +135,54 @@ final class HTML_To_Markdown_Converter {
 				&& (
 					in_array( $token_name, array( 'SCRIPT', 'STYLE' ), true )
 					|| 'true' === strtolower( trim( (string) $processor->get_attribute( 'aria-hidden' ) ) )
+					// Buttons are controls unless they carry a heading's text.
+					|| ( 'BUTTON' === $token_name && 0 === $heading_depth )
 				)
 			) {
 				if ( $processor instanceof WP_HTML_Processor ) {
 					$this->skip_processor_element( $processor );
 				} elseif ( $this->element_expects_closer( $processor, $token_name ) ) {
 					$hidden_stack[] = $token_name;
+				}
+				continue;
+			}
+
+			if ( $is_tag && $token_name && preg_match( '/^H[1-6]$/', $token_name ) ) {
+				$heading_depth = max( 0, $heading_depth + ( $processor->is_tag_closer() ? -1 : 1 ) );
+			}
+
+			if ( $is_tag && 'LITE-YOUTUBE' === $token_name ) {
+				if ( $processor->is_tag_closer() ) {
+					$link = array_pop( $video_stack );
+				} else {
+					$video_id      = (string) $processor->get_attribute( 'videoid' );
+					$title         = trim( (string) $processor->get_attribute( 'title' ) );
+					$video_stack[] = preg_match( '/^[A-Za-z0-9_-]{11}$/', $video_id )
+						? '[Video: ' . $this->escape_markdown_link_text( '' !== $title ? $title : 'YouTube' ) . '](https://www.youtube.com/watch?v=' . $video_id . ')'
+						: null;
+					continue;
+				}
+				if ( $link ) {
+					$context = null !== $cell ? $cell : $document;
+					$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+					$this->append_text( $context['output'], $link, $context['at_line_start'], $context['blockquote_depth'], true );
+					$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
+					if ( null !== $cell ) {
+						$cell = $context;
+					} else {
+						$document = $context;
+					}
+				}
+				continue;
+			}
+
+			if ( $is_tag && 'BR' === $token_name && 0 < $heading_depth ) {
+				if ( null !== $cell ) {
+					$cell['output'] = rtrim( $cell['output'], " \t" );
+					$this->append_text( $cell['output'], ' ', $cell['at_line_start'], $cell['blockquote_depth'], true );
+				} else {
+					$document['output'] = rtrim( $document['output'], " \t" );
+					$this->append_text( $document['output'], ' ', $document['at_line_start'], $document['blockquote_depth'], true );
 				}
 				continue;
 			}
@@ -229,16 +273,18 @@ final class HTML_To_Markdown_Converter {
 	 */
 	private function create_context(): array {
 		return array(
-			'output'           => '',
-			'at_line_start'    => true,
-			'blockquote_depth' => 0,
-			'in_pre'           => false,
-			'pre_code'         => null,
-			'inline_code'      => null,
-			'link_stack'       => array(),
-			'last_link_end'    => null,
-			'list_stack'       => array(),
-			'media_stack'      => array(),
+			'output'            => '',
+			'at_line_start'     => true,
+			'blockquote_depth'  => 0,
+			'in_pre'            => false,
+			'pre_code'          => null,
+			'inline_code'       => null,
+			'inline_code_parts' => array(),
+			'inline_code_link'  => null,
+			'link_stack'        => array(),
+			'last_link_end'     => null,
+			'list_stack'        => array(),
+			'media_stack'       => array(),
 		);
 	}
 
@@ -284,6 +330,12 @@ final class HTML_To_Markdown_Converter {
 		if ( null !== $context['inline_code'] && 'CODE' !== $token_name ) {
 			if ( 'BR' === $token_name ) {
 				$context['inline_code'] .= "\n";
+			} elseif ( 'A' === $token_name ) {
+				if ( '' !== $context['inline_code'] ) {
+					$context['inline_code_parts'][] = array( $context['inline_code'], $context['inline_code_link'] );
+					$context['inline_code']         = '';
+				}
+				$context['inline_code_link'] = $is_closer ? null : (string) $processor->get_attribute( 'href' );
 			}
 			return;
 		}
@@ -330,7 +382,9 @@ final class HTML_To_Markdown_Converter {
 
 		if ( 'CODE' === $token_name && ! $context['in_pre'] ) {
 			if ( ! $is_closer ) {
-				$context['inline_code'] = '';
+				$context['inline_code']       = '';
+				$context['inline_code_parts'] = array();
+				$context['inline_code_link']  = null;
 				return;
 			}
 
@@ -367,7 +421,7 @@ final class HTML_To_Markdown_Converter {
 			$src = (string) $processor->get_attribute( 'src' );
 			if ( '' !== $src ) {
 				$alt = (string) $processor->get_attribute( 'alt' );
-				$this->append_text( $context['output'], '![' . $alt . '](' . $this->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
+				$this->append_text( $context['output'], '![' . $this->escape_markdown_link_text( $alt ) . '](' . $this->escape_markdown_destination( $src ) . ')', $context['at_line_start'], $context['blockquote_depth'], true );
 			}
 			return;
 		}
@@ -400,13 +454,23 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		if ( 'FIGURE' === $token_name ) {
+			if ( $this->has_active_list_item( $context ) ) {
+				if ( $is_closer ) {
+					$this->append_list_continuation( $context );
+				}
+				return;
+			}
 			$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
 			return;
 		}
 
 		if ( 'FIGCAPTION' === $token_name ) {
 			if ( ! $is_closer ) {
-				$this->ensure_newline( $context['output'], $context['at_line_start'] );
+				if ( $this->has_active_list_item( $context ) ) {
+					$this->append_list_continuation( $context );
+				} else {
+					$this->ensure_newline( $context['output'], $context['at_line_start'] );
+				}
 				$this->append_text( $context['output'], '*', $context['at_line_start'], $context['blockquote_depth'], true );
 			} else {
 				$context['output'] .= '*';
@@ -432,8 +496,9 @@ final class HTML_To_Markdown_Converter {
 				$start = 'OL' === $token_name ? $processor->get_attribute( 'start' ) : null;
 
 				$context['list_stack'][] = array(
-					'type'  => $token_name,
-					'index' => null !== $start ? (int) $start - 1 : 0,
+					'type'                => $token_name,
+					'index'               => null !== $start ? (int) $start - 1 : 0,
+					'continuation_indent' => null,
 				);
 				$this->ensure_blank_line( $context['output'], $context['at_line_start'], $context['blockquote_depth'] );
 			}
@@ -452,6 +517,22 @@ final class HTML_To_Markdown_Converter {
 			}
 
 			$this->append_text( $context['output'], $indent . $marker . ' ', $context['at_line_start'], $context['blockquote_depth'], true );
+			if ( 0 < $depth ) {
+				$context['list_stack'][ $depth - 1 ]['continuation_indent'] = str_repeat( ' ', strlen( $indent . $marker . ' ' ) );
+			}
+			return;
+		}
+
+		if ( 'LI' === $token_name && $is_closer ) {
+			$depth = count( $context['list_stack'] );
+			if ( 0 < $depth ) {
+				$indent = $context['list_stack'][ $depth - 1 ]['continuation_indent'];
+				if ( null !== $indent && str_ends_with( $context['output'], "\n" . $indent ) ) {
+					$context['output']        = substr( $context['output'], 0, -strlen( $indent ) );
+					$context['at_line_start'] = true;
+				}
+				$context['list_stack'][ $depth - 1 ]['continuation_indent'] = null;
+			}
 			return;
 		}
 
@@ -586,16 +667,73 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		if ( null !== $context['inline_code'] ) {
-			$content = str_replace( array( "\r\n", "\r", "\n" ), ' ', (string) $context['inline_code'] );
-
-			$context['inline_code'] = null;
-
-			$fence         = $this->code_delimiter( $content, 1 );
-			$needs_padding = str_starts_with( $content, '`' ) || str_ends_with( $content, '`' )
-				|| ( str_starts_with( $content, ' ' ) && str_ends_with( $content, ' ' ) && '' !== trim( $content ) );
-			$space         = $needs_padding ? ' ' : '';
-			$this->append_text( $context['output'], $fence . $space . $content . $space . $fence, $context['at_line_start'], $context['blockquote_depth'], true );
+			if ( '' !== $context['inline_code'] || empty( $context['inline_code_parts'] ) ) {
+				$context['inline_code_parts'][] = array( $context['inline_code'], $context['inline_code_link'] );
+			}
+			$rendered = '';
+			foreach ( $context['inline_code_parts'] as $part ) {
+				$span      = $this->inline_code_span( (string) $part[0] );
+				$rendered .= $part[1] ? '[' . $span . '](' . $this->escape_markdown_destination( $part[1] ) . ')' : $span;
+			}
+			$context['inline_code']       = null;
+			$context['inline_code_parts'] = array();
+			$context['inline_code_link']  = null;
+			$this->append_text( $context['output'], $rendered, $context['at_line_start'], $context['blockquote_depth'], true );
 		}
+	}
+
+	/**
+	 * Format one run of inline code with a safe delimiter.
+	 *
+	 * @param string $content Code text.
+	 * @return string Markdown code span.
+	 */
+	private function inline_code_span( string $content ): string {
+		$content       = str_replace( array( "\r\n", "\r", "\n" ), ' ', $content );
+		$fence         = $this->code_delimiter( $content, 1 );
+		$needs_padding = str_starts_with( $content, '`' ) || str_ends_with( $content, '`' )
+			|| ( str_starts_with( $content, ' ' ) && str_ends_with( $content, ' ' ) && '' !== trim( $content ) );
+		$space         = $needs_padding ? ' ' : '';
+		return $fence . $space . $content . $space . $fence;
+	}
+
+	/**
+	 * Whether conversion is currently inside a list item.
+	 *
+	 * @param array $context Conversion context.
+	 * @return bool Whether a list item is active.
+	 */
+	private function has_active_list_item( array $context ): bool {
+		if ( empty( $context['list_stack'] ) ) {
+			return false;
+		}
+		$last = $context['list_stack'][ count( $context['list_stack'] ) - 1 ];
+		return null !== $last['continuation_indent'];
+	}
+
+	/**
+	 * Continue a block element within its containing Markdown list item.
+	 *
+	 * @param array $context Conversion context (by reference).
+	 */
+	private function append_list_continuation( array &$context ): void {
+		$last = $context['list_stack'][ count( $context['list_stack'] ) - 1 ];
+		$this->ensure_newline( $context['output'], $context['at_line_start'] );
+		$this->append_text( $context['output'], $last['continuation_indent'], $context['at_line_start'], $context['blockquote_depth'], true );
+	}
+
+	/**
+	 * Escape plain HTML attribute text used as a Markdown link label.
+	 *
+	 * @param string $text Visible label text.
+	 * @return string Markdown-safe label.
+	 */
+	private function escape_markdown_link_text( string $text ): string {
+		return str_replace(
+			array( '\\', '[', ']', '*', '_', '`' ),
+			array( '\\\\', '\\[', '\\]', '\\*', '\\_', '\\`' ),
+			$text
+		);
 	}
 
 	/**

@@ -59,7 +59,9 @@ class Markdown_Converter {
 		try {
 			$GLOBALS['post'] = $post_object; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 			setup_postdata( $post_object );
-			return trim( $this->blocks_to_markdown( parse_blocks( $post_object->post_content ), $post_object ) );
+			$markdown = trim( $this->blocks_to_markdown( parse_blocks( $post_object->post_content ), $post_object ) );
+			// Match WordPress's the_content handling of legacy same-site HTTP URLs.
+			return wp_replace_insecure_home_url( $markdown );
 		} finally {
 			foreach ( $keys as $key ) {
 				if ( array_key_exists( $key, $saved ) ) {
@@ -167,6 +169,23 @@ class Markdown_Converter {
 			// Default: render block to HTML, then convert to markdown.
 			$html = render_block( $block );
 			$md   = $converter->convert( $html );
+			if ( 'core/embed' === $block_name ) {
+				global $wp_embed;
+				$embed_url = $block['attrs']['url'] ?? '';
+				if ( $wp_embed instanceof \WP_Embed && is_string( $embed_url ) && '' !== $embed_url ) {
+					$resolved_md   = $converter->convert( $wp_embed->shortcode( array(), $embed_url ) );
+					$resolved_text = trim( $resolved_md );
+					if (
+						'' !== $resolved_text
+						&& ! in_array( $resolved_text, array( $embed_url, '[' . $embed_url . '](' . $embed_url . ')' ), true )
+					) {
+						$md = $resolved_md;
+						if ( preg_match( '~<figcaption\b[^>]*>.*?</figcaption>~is', $html, $caption ) ) {
+							$md .= "\n\n" . $converter->convert( $caption[0] );
+						}
+					}
+				}
+			}
 			if ( '' !== trim( $md ) ) {
 				$parts[] = $md;
 			}

@@ -80,6 +80,47 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * A nested page remains reachable when URL-to-post lookup misses its path.
+	 */
+	public function test_nested_page_path_falls_back_to_canonical_page(): void {
+		$this->configure_permalink_structure( '/%postname%/' );
+		$parent_id  = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_name'   => 'partners',
+			)
+		);
+		$child_id   = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_name'   => 'strategic-alliances',
+				'post_parent' => $parent_id,
+			)
+		);
+		$force_miss = static function (): string {
+			return 'https://invalid.example/';
+		};
+		add_filter( 'url_to_postid', $force_miss );
+		try {
+			$this->assertSame( $child_id, $this->endpoint->get_post_from_path_for_test( 'partners/strategic-alliances' )->ID );
+			$this->assertNull( $this->endpoint->get_post_from_path_for_test( 'partners/not-a-page' ) );
+			$other_permalink = static function ( string $link, int $post_id ) use ( $child_id ): string {
+				return $child_id === $post_id ? home_url( '/other-page/' ) : $link;
+			};
+			add_filter( 'page_link', $other_permalink, 10, 2 );
+			try {
+				$this->assertNull( $this->endpoint->get_post_from_path_for_test( 'partners/strategic-alliances' ) );
+			} finally {
+				remove_filter( 'page_link', $other_permalink );
+			}
+		} finally {
+			remove_filter( 'url_to_postid', $force_miss );
+		}
+	}
+
+	/**
 	 * Preserve the test suite's permalink structure.
 	 */
 	public function set_up(): void {
