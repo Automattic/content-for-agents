@@ -17,21 +17,19 @@ export default function Categories( {
 	const selected = automatic
 		? categories.filter( term => term.count > 0 ).map( term => term.id )
 		: state.draft.category_ids;
+	const automaticDescription = __(
+		'Automatic: includes top-level categories with published posts.',
+		'content-for-agents'
+	);
+	const customDescription = __(
+		'Custom selection: includes the selected top-level categories.',
+		'content-for-agents'
+	);
 	return (
 		<Section
 			title={ __( 'Categories', 'content-for-agents' ) }
 			state={ state }
-			description={
-				automatic
-					? __(
-							'Automatic: includes top-level categories with published posts.',
-							'content-for-agents'
-					  )
-					: __(
-							'Custom selection: includes the selected top-level categories.',
-							'content-for-agents'
-					  )
-			}
+			description={ automatic ? automaticDescription : customDescription }
 		>
 			{ categories.map( term => (
 				<CheckboxControl
