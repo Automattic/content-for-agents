@@ -148,6 +148,7 @@ final class Markdown_Output_Writer {
 	 * @return string Markdown-safe label.
 	 */
 	public function escape_markdown_link_text( string $text ): string {
+		$text = (string) preg_replace( '/\s+/u', ' ', $text );
 		return str_replace(
 			array( '\\', '[', ']', '*', '_', '`' ),
 			array( '\\\\', '\\[', '\\]', '\\*', '\\_', '\\`' ),

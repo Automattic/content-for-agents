@@ -8,7 +8,7 @@ Second line
 ---
 
 ![Hammer](https://example.com/hammer.jpg)
-*Hammer caption*
+_Hammer caption_
 
 - Outer item
 
@@ -59,10 +59,10 @@ Second verse line.
 ```
 
 ![Gallery one](https://example.com/gallery-one.jpg)
-*SENTINEL-GALLERY first caption*
+_SENTINEL-GALLERY first caption_
 
 ![Gallery two](https://example.com/gallery-two.jpg)
-*Second gallery caption*
+_Second gallery caption_
 
 ![Media text image](https://example.com/media-text.jpg)
 
@@ -75,14 +75,14 @@ SENTINEL-COVER nested content.
 [SENTINEL-FILE guide](https://example.com/guide\(v2\).pdf) [Download guide](https://example.com/guide\(v2\).pdf)
 
 [Audio](https://example.com/audio.mp3)
-*SENTINEL-AUDIO recording*
+_SENTINEL-AUDIO recording_
 
 [Video](https://example.com/video.mp4)
-*SENTINEL-VIDEO recording*
+_SENTINEL-VIDEO recording_
 
 https://example.com/embed
 
-*SENTINEL-EMBED reference*
+_SENTINEL-EMBED reference_
 
 - SENTINEL-LIST-ITEM first child
 - Second child
@@ -122,7 +122,7 @@ SENTINEL-CUSTOM-GROUP-AFTER
 
 | Feature | Rendered content |
 | --- | --- |
-| ### Rich cell<br>SENTINEL-TABLE has **bold**, *emphasis*, `code`, and literal A \| B.<br>- Cell item | Line one<br>Line two with [cell link](https://example.com/cell).<br>![Cell image](https://example.com/cell.jpg)<br>*Cell caption* |
+| ### Rich cell<br>SENTINEL-TABLE has **bold**, *emphasis*, `code`, and literal A \| B.<br>- Cell item | Line one<br>Line two with [cell link](https://example.com/cell).<br>![Cell image](https://example.com/cell.jpg)<br>_Cell caption_ |
 | Span attributes are ignored | Block one<br>Block two |
 
 SENTINEL-UNKNOWN survives an unknown wrapper.
