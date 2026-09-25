@@ -22,8 +22,8 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
 - Supports `markdown=true` on WordPress singular URLs. Published content is
   available publicly, non-public statuses retain WordPress read permissions,
   and WordPress validates preview state and nonces.
-- Converts Block Editor content, nested blocks, and Classic Editor HTML to
-  readable Markdown.
+- Converts nested Block Editor blocks, Classic Editor HTML, and posts that mix
+  blocks with freeform HTML to readable Markdown.
 - Publishes a configurable `/llms.txt` index and advertises Markdown and the
   index through HTML discovery links.
 - Provides settings for the site summary, About links, categories, featured

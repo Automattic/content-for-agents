@@ -91,7 +91,7 @@ class Markdown_Converter {
 			if ( null === $block_name ) {
 				$trimmed = trim( $block['innerHTML'] ?? '' );
 				if ( '' !== $trimmed ) {
-					$parts[] = $converter->convert( $trimmed );
+					$parts[] = $this->convert_rendered_html( $trimmed, $converter );
 				}
 				continue;
 			}
@@ -168,7 +168,7 @@ class Markdown_Converter {
 
 			// Default: render block to HTML, then convert to markdown.
 			$html = render_block( $block );
-			$md   = $converter->convert( $html );
+			$md   = $this->convert_rendered_html( $html, $converter );
 			if ( 'core/embed' === $block_name ) {
 				global $wp_embed;
 				$embed_url = $block['attrs']['url'] ?? '';
@@ -181,7 +181,7 @@ class Markdown_Converter {
 					) {
 						$md = $resolved_md;
 						if ( preg_match( '~<figcaption\b[^>]*>.*?</figcaption>~is', $html, $caption ) ) {
-							$md .= "\n\n" . $converter->convert( $caption[0] );
+							$md .= "\n\n" . $this->convert_rendered_html( $caption[0], $converter );
 						}
 					}
 				}
@@ -192,6 +192,17 @@ class Markdown_Converter {
 		}
 
 		return implode( "\n\n", $parts );
+	}
+
+	/**
+	 * Apply WordPress text formatting to block HTML as the content filter does.
+	 *
+	 * @param string                     $html      Rendered block HTML.
+	 * @param HTML_To_Markdown_Converter $converter HTML converter.
+	 * @return string Markdown output.
+	 */
+	private function convert_rendered_html( string $html, HTML_To_Markdown_Converter $converter ): string {
+		return $converter->convert( capital_P_dangit( wptexturize( $html ) ) );
 	}
 
 	/**
@@ -284,7 +295,7 @@ class Markdown_Converter {
 				$owned_html = (string) preg_replace( '/<!--.*?-->/s', '', $owned_html );
 				$owned_html = (string) preg_replace( '~</?(?:blockquote|cite)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', '', $owned_html );
 			}
-			$owned_md = $converter->convert( $owned_html );
+			$owned_md = $this->convert_rendered_html( $owned_html, $converter );
 			if ( '' !== trim( $owned_md ) ) {
 				$parts[] = $owned_md;
 			}
@@ -321,7 +332,7 @@ class Markdown_Converter {
 		if ( $is_native_item && ! $this->descendants_require_zipping( $child['innerBlocks'] ?? array() ) ) {
 			$tag   = $list_context['ordered'] ? 'ol' : 'ul';
 			$start = $list_context['ordered'] ? ' start="' . $list_context['index'] . '"' : '';
-			return $converter->convert( '<' . $tag . $start . '>' . render_block( $child ) . '</' . $tag . '>' );
+			return $this->convert_rendered_html( '<' . $tag . $start . '>' . render_block( $child ) . '</' . $tag . '>', $converter );
 		}
 
 		$markdown = $this->blocks_to_markdown( array( $child ), $post );

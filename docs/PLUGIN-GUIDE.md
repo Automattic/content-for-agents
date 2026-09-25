@@ -100,10 +100,13 @@ is used instead of adding a duplicate title.
 Text and descendants inside an element with `aria-hidden="true"` are excluded;
 `aria-hidden="false"` and content without the attribute remain visible.
 Unrecognized leaf blocks use HTML conversion; container blocks process children.
+HTML fallback applies the same WordPress typography and capitalization filters
+used for rendered content. Links without a destination become plain text, and
+emphasis and captions keep boundary spaces outside Markdown delimiters.
 WordPress 7.0 accordion headings become Markdown headings, their panels retain
 body text, and math block text is preserved.
-Classic Editor and other freeform post HTML use the same HTML conversion path,
-so the plugin does not require the Block Editor to be enabled.
+Classic Editor posts and freeform HTML mixed with blocks use the same HTML
+conversion path. The plugin does not require the Block Editor to be enabled.
 Buttons used as interface controls are omitted from Markdown. Buttons that
 label headings, such as accordion titles, retain their text. Visible status
 messages remain in the output, including widget loading messages when WordPress

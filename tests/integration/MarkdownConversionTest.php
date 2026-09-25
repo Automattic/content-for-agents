@@ -101,13 +101,41 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Unsupported tree repairs still process content after the bailout point.
+	 */
+	public function test_unsupported_html_falls_back_without_truncating_content(): void {
+		$html      = '<p><b>Bold<i>italic</b>after</i></p><p>Tail</p>';
+		$processor = \WP_HTML_Processor::create_fragment( $html );
+		$this->assertNotNull( $processor );
+		while ( $processor->next_token() ) {
+			continue;
+		}
+		$this->assertSame( \WP_HTML_Processor::ERROR_UNSUPPORTED, $processor->get_last_error() );
+
+		$markdown = ( new HTML_To_Markdown_Converter() )->convert( $html );
+		$this->assertStringContainsString( 'Bold', $markdown );
+		$this->assertStringContainsString( 'italic', $markdown );
+		$this->assertStringContainsString( 'Tail', $markdown );
+	}
+
+	/**
 	 * Figure captions and following text stay inside their list item.
 	 */
 	public function test_figure_content_stays_within_list_item(): void {
 		$html = '<ol><li><figure><img src="https://example.com/a.jpg" alt="A"><figcaption>Caption</figcaption></figure>Image description</li><li>Next item</li></ol>';
 		$this->assertSame(
-			"1. ![A](https://example.com/a.jpg)\n   *Caption*\n   Image description\n2. Next item",
+			"1. ![A](https://example.com/a.jpg)\n   _Caption_\n   Image description\n2. Next item",
 			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Emphasis inside a caption remains valid Markdown.
+	 */
+	public function test_caption_with_emphasis_and_space_keeps_its_text(): void {
+		$this->assertSame(
+			'_*Caption*_',
+			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption><em>Caption </em></figcaption></figure>' )
 		);
 	}
 
@@ -219,6 +247,33 @@ HTML
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( "## Classic heading\n\nClassic content.\n\nVisible + remains.", $markdown );
+	}
+
+	/**
+	 * Markdown uses the same typographic text shown by rendered post content.
+	 */
+	public function test_post_text_matches_wordpress_typography(): void {
+		$post_id = self::factory()->post->create(
+			array(
+				'post_content' => '<!-- wp:paragraph --><p>You\'re "ready".</p><!-- /wp:paragraph -->',
+				'post_status'  => 'draft',
+			)
+		);
+		$this->assertSame( 'You’re “ready”.', ( new Markdown_Converter() )->post_to_markdown( $post_id ) );
+		$capitalization_id = self::factory()->post->create(
+			array(
+				'post_content' => '<!-- wp:paragraph --><p>Wordpress VIP</p><!-- /wp:paragraph -->',
+				'post_status'  => 'draft',
+			)
+		);
+		$this->assertSame( 'WordPress VIP', ( new Markdown_Converter() )->post_to_markdown( $capitalization_id ) );
+		$code_id = self::factory()->post->create(
+			array(
+				'post_content' => '<!-- wp:paragraph --><p><code>You\'re</code> You\'re</p><!-- /wp:paragraph -->',
+				'post_status'  => 'draft',
+			)
+		);
+		$this->assertSame( '`You\'re` You’re', ( new Markdown_Converter() )->post_to_markdown( $code_id ) );
 	}
 
 	/**
@@ -493,7 +548,7 @@ MARKDOWN
 HTML;
 
 		$this->assertSame(
-			"[Audio](https://example.com/one.mp3)\n*Audio caption*\n\n[Video](https://example.com/one.mp4)\n*Video caption*",
+			"[Audio](https://example.com/one.mp3)\n_Audio caption_\n\n[Video](https://example.com/one.mp4)\n_Video caption_",
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 	}
@@ -664,6 +719,14 @@ HTML;
 	}
 
 	/**
+	 * Multiline image alt text stays inside one Markdown image label.
+	 */
+	public function test_image_alt_whitespace_keeps_image_syntax(): void {
+		$html = "<img src=\"https://example.com/image.png\" alt=\"First line.\n\nSecond line.\">";
+		$this->assertSame( '![First line. Second line.](https://example.com/image.png)', ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
 	 * Links nested inside inline code retain their destinations and scope.
 	 */
 	public function test_links_inside_inline_code_keep_their_destinations(): void {
@@ -686,11 +749,52 @@ HTML;
 	}
 
 	/**
+	 * An anchor without a destination is visible text, not a Markdown link.
+	 */
+	public function test_anchor_without_href_renders_plain_text(): void {
+		$html = '<p><a class="wp-block-button__link">Request a demo</a> or <a href="https://example.com/demo">read more</a>.</p>';
+		$this->assertSame(
+			'Request a demo or [read more](https://example.com/demo).',
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+		$this->assertSame( '[Zero](0)', ( new HTML_To_Markdown_Converter() )->convert( '<a href="0">Zero</a>' ) );
+	}
+
+	/**
+	 * Spaces inside HTML emphasis tags must not prevent Markdown emphasis.
+	 */
+	public function test_emphasis_moves_boundary_spaces_outside_markers(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( '**Label:** Text', $converter->convert( '<p><strong>Label: </strong>Text</p>' ) );
+		$this->assertSame( 'Before **label** after', $converter->convert( '<p>Before<strong> label</strong> after</p>' ) );
+		$this->assertSame( 'Before *label* after', $converter->convert( '<p>Before<em> label </em>after</p>' ) );
+	}
+
+	/**
+	 * Adjacent emphasis and emphasized links stay valid without added spaces.
+	 */
+	public function test_adjacent_emphasis_and_emphasized_links(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( '**AB**', $converter->convert( '<strong>A</strong><strong>B</strong>' ) );
+		$this->assertSame( '**A** **B**', $converter->convert( '<strong>A </strong><strong>B</strong>' ) );
+		$this->assertSame( '*A* *B*', $converter->convert( '<em>A </em><em>B</em>' ) );
+		$this->assertSame( 'Before[**link**](/x)after', $converter->convert( '<p>Before<strong><a href="/x">link</a></strong>after</p>' ) );
+	}
+
+	/**
 	 * Nested list items retain the indentation that makes them structural.
 	 */
 	public function test_nested_list_items_keep_their_indentation(): void {
 		$html = '<ul><li>Parent<ul><li>Child</li></ul></li></ul>';
 		$this->assertSame( "- Parent\n\n  - Child", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Nested markers align with the full width of their parent marker.
+	 */
+	public function test_nested_ordered_list_uses_parent_marker_width(): void {
+		$html = '<ol start="7"><li>Section<ol><li>Nested</li><li>Second</li></ol></li><li>Next</li></ol>';
+		$this->assertSame( "7. Section\n\n   1. Nested\n   2. Second\n\n8. Next", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
 	}
 
 	/**
@@ -740,7 +844,7 @@ HTML;
 			. '<ol start="9"><li><figure><img src="https://example.com/a.jpg" alt="A"><figcaption>Caption</figcaption></figure>After image</li><li>Next</li></ol>'
 			. "<pre><code>a\n  b</code></pre><p>Outro</p>";
 		$this->assertSame(
-			"Intro\n\n> Quoted line\n>\n> — Editor\n\n9. ![A](https://example.com/a.jpg)\n   *Caption*\n   After image\n10. Next\n\n```\na\n  b\n```\n\nOutro",
+			"Intro\n\n> Quoted line\n>\n> — Editor\n\n9. ![A](https://example.com/a.jpg)\n   _Caption_\n   After image\n10. Next\n\n```\na\n  b\n```\n\nOutro",
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 	}
