@@ -276,7 +276,11 @@ final class HTML_To_Markdown_Converter {
 				$context->inline_code .= (string) $processor->get_modifiable_text();
 				return;
 			}
-			$this->append_formatted_text( $context, (string) $processor->get_modifiable_text() );
+			$text = (string) $processor->get_modifiable_text();
+			if ( '' !== trim( $text ) ) {
+				$this->begin_active_link( $context );
+			}
+			$this->append_formatted_text( $context, $text );
 			return;
 		}
 
@@ -286,6 +290,9 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		$is_closer = $processor->is_tag_closer();
+		if ( in_array( $token_name, array( 'P', 'DIV', 'BLOCKQUOTE', 'PRE', 'FIGURE', 'FIGCAPTION', 'UL', 'OL', 'LI', 'HR' ), true ) || preg_match( '/^H[1-6]$/', (string) $token_name ) ) {
+			$this->close_active_link( $context );
+		}
 		if ( null !== $context->pre_code && 'PRE' !== $token_name ) {
 			if ( 'BR' === $token_name ) {
 				$context->pre_code .= "\n";
@@ -306,6 +313,15 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		if ( 'BR' === $token_name ) {
+			// Markdown emphasis cannot close after a line break. Close each
+			// active span now and reopen it if more text follows the break.
+			for ( $index = count( $context->emphasis_stack ) - 1; $index >= 0; --$index ) {
+				if ( $context->emphasis_stack[ $index ]['emitted'] ) {
+					$this->writer->append_text( $context->output, $context->emphasis_stack[ $index ]['marker'], $context->at_line_start, $context->blockquote_depth, true );
+					$context->emphasis_stack[ $index ]['emitted'] = false;
+					$context->emphasis_stack[ $index ]['start']   = null;
+				}
+			}
 			$this->writer->append_newline( $context->output, $context->at_line_start, $context->in_pre );
 			return;
 		}
@@ -369,23 +385,20 @@ final class HTML_To_Markdown_Converter {
 
 		if ( 'A' === $token_name ) {
 			if ( $is_closer ) {
-				$href = (string) array_pop( $context->link_stack );
-				if ( '' !== $href ) {
-					$context->last_link_suffix_start = strlen( $context->output );
-					$this->writer->append_text( $context->output, '](' . $this->writer->escape_markdown_destination( $href ) . ')', $context->at_line_start, $context->blockquote_depth, true );
-					$context->last_link_end = strlen( $context->output );
-				}
+				$this->close_active_link( $context );
+				array_pop( $context->link_stack );
 			} else {
-				$href                  = (string) $processor->get_attribute( 'href' );
-				$context->link_stack[] = $href;
+				$href = (string) $processor->get_attribute( 'href' );
 				if ( '' !== $href ) {
 					$this->flush_pending_emphasis( $context );
 					if ( strlen( $context->output ) === $context->last_link_end && ! $context->at_line_start ) {
 						$this->writer->append_text( $context->output, ' ', $context->at_line_start, $context->blockquote_depth, true );
 					}
-					$context->last_link_start = strlen( $context->output );
-					$this->writer->append_text( $context->output, '[', $context->at_line_start, $context->blockquote_depth, true );
 				}
+				$context->link_stack[] = array(
+					'href' => $href,
+					'open' => false,
+				);
 			}
 			return;
 		}
@@ -393,6 +406,7 @@ final class HTML_To_Markdown_Converter {
 		if ( 'IMG' === $token_name && ! $is_closer ) {
 			$src = (string) $processor->get_attribute( 'src' );
 			if ( '' !== $src ) {
+				$this->begin_active_link( $context );
 				$this->flush_pending_emphasis( $context );
 				$alt = (string) $processor->get_attribute( 'alt' );
 				$this->writer->append_text( $context->output, '![' . $this->writer->escape_markdown_link_text( $alt ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context->at_line_start, $context->blockquote_depth, true );
@@ -411,6 +425,7 @@ final class HTML_To_Markdown_Converter {
 					'has_src' => '' !== $src,
 				);
 				if ( '' !== $src ) {
+					$this->begin_active_link( $context );
 					$this->flush_pending_emphasis( $context );
 					$this->writer->append_text( $context->output, '[' . ucfirst( strtolower( $token_name ) ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context->at_line_start, $context->blockquote_depth, true );
 				}
@@ -422,6 +437,7 @@ final class HTML_To_Markdown_Converter {
 			$index = count( $context->media_stack ) - 1;
 			$src   = (string) $processor->get_attribute( 'src' );
 			if ( ! $context->media_stack[ $index ]['has_src'] && '' !== $src ) {
+				$this->begin_active_link( $context );
 				$this->flush_pending_emphasis( $context );
 				$this->writer->append_text( $context->output, '[' . ucfirst( strtolower( $context->media_stack[ $index ]['type'] ) ) . '](' . $this->writer->escape_markdown_destination( $src ) . ')', $context->at_line_start, $context->blockquote_depth, true );
 				$context->media_stack[ $index ]['has_src'] = true;
@@ -527,6 +543,45 @@ final class HTML_To_Markdown_Converter {
 	}
 
 	/**
+	 * Start a link after any Markdown block marker has been written.
+	 *
+	 * @param Markdown_Conversion_Context $context Current output state.
+	 */
+	private function begin_active_link( Markdown_Conversion_Context $context ): void {
+		$index = count( $context->link_stack ) - 1;
+		if ( $index < 0 || '' === $context->link_stack[ $index ]['href'] || $context->link_stack[ $index ]['open'] ) {
+			return;
+		}
+
+		$context->last_link_start = strlen( $context->output );
+		$this->writer->append_text( $context->output, '[', $context->at_line_start, $context->blockquote_depth, true );
+		$context->link_stack[ $index ]['open'] = true;
+	}
+
+	/**
+	 * End a link before a Markdown block boundary.
+	 *
+	 * @param Markdown_Conversion_Context $context Current output state.
+	 */
+	private function close_active_link( Markdown_Conversion_Context $context ): void {
+		$index = count( $context->link_stack ) - 1;
+		if ( $index < 0 || ! $context->link_stack[ $index ]['open'] ) {
+			return;
+		}
+
+		$context->last_link_suffix_start = strlen( $context->output );
+		$this->writer->append_text(
+			$context->output,
+			'](' . $this->writer->escape_markdown_destination( $context->link_stack[ $index ]['href'] ) . ')',
+			$context->at_line_start,
+			$context->blockquote_depth,
+			true
+		);
+		$context->last_link_end                = strlen( $context->output );
+		$context->link_stack[ $index ]['open'] = false;
+	}
+
+	/**
 	 * Place leading spaces before pending emphasis markers.
 	 *
 	 * @param Markdown_Conversion_Context $context Current output state.
@@ -540,6 +595,17 @@ final class HTML_To_Markdown_Converter {
 
 		if ( '' === $text ) {
 			return;
+		}
+
+		if ( $context->at_line_start ) {
+			$text = (string) preg_replace_callback(
+				'/^(\s*)(?:([+*-])(?=\s|$)|(\d+)([.)])(?=\s|$))/u',
+				static function ( array $matches ): string {
+					$marker = '' !== ( $matches[2] ?? '' ) ? $matches[2] : $matches[3] . $matches[4];
+					return $matches[1] . substr( $marker, 0, -1 ) . '\\' . substr( $marker, -1 );
+				},
+				$text
+			);
 		}
 
 		$this->flush_pending_emphasis( $context );
@@ -740,6 +806,7 @@ final class HTML_To_Markdown_Converter {
 		}
 
 		if ( null !== $context->inline_code ) {
+			$this->begin_active_link( $context );
 			$this->flush_pending_emphasis( $context );
 			if ( '' !== $context->inline_code || empty( $context->inline_code_parts ) ) {
 				$context->inline_code_parts[] = array( $context->inline_code, $context->inline_code_link );

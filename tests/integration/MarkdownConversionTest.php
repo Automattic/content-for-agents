@@ -140,6 +140,40 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Plain paragraphs must not become Markdown lists when they begin with markers.
+	 */
+	public function test_paragraphs_escape_literal_list_markers(): void {
+		$this->assertSame(
+			"1\\. **First tip**\n\n\\+\n\nNext paragraph",
+			( new HTML_To_Markdown_Converter() )->convert( '<p>1. <strong>First tip</strong></p><p><sub>+</sub></p><p>Next paragraph</p>' )
+		);
+	}
+
+	/**
+	 * Emphasis crossing a line break must remain valid Markdown.
+	 */
+	public function test_line_break_closes_and_reopens_emphasis(): void {
+		$this->assertSame(
+			"**First**\n**Second**",
+			( new HTML_To_Markdown_Converter() )->convert( '<p><strong>First<br>Second</strong></p>' )
+		);
+	}
+
+	/**
+	 * Link fixtures are also parsed by the frontend Markdown rendering test.
+	 */
+	public function test_links_match_rendering_fixtures(): void {
+		$fixtures = json_decode( (string) file_get_contents( dirname( __DIR__ ) . '/fixtures/linked-content.json' ), true );
+		foreach ( $fixtures as $fixture ) {
+			$this->assertSame(
+				$fixture['markdown'],
+				( new HTML_To_Markdown_Converter() )->convert( $fixture['html'] ),
+				$fixture['name']
+			);
+		}
+	}
+
+	/**
 	 * Parent metadata callbacks take precedence over parent registry callbacks.
 	 */
 	public function test_parent_metadata_callback_precedes_parent_registry_callback(): void {

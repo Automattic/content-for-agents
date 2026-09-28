@@ -23,7 +23,7 @@ final class Markdown_Conversion_Context {
 
 	public ?string $inline_code_link = null;
 
-	/** @var array<int, string> */
+	/** @var array<int, array{href: string, open: bool}> */
 	public array $link_stack = array();
 
 	public ?int $last_link_end                  = null;
