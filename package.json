@@ -36,6 +36,7 @@
     "@wordpress/element": "^6.0.0",
     "@wordpress/i18n": "^6.0.0",
     "eslint": "9.39.2",
+    "markdown-it": "^12.3.2",
     "prettier": "npm:wp-prettier@3.9.6",
     "typescript": "^6.0.3",
     "@types/react": "^18.3.31"

@@ -4,7 +4,7 @@ import { defineConfig } from 'eslint/config';
 export default defineConfig( [
 	...plugin.configs.recommended,
 	{
-		ignores: [ '*.php', '**/build/', '**/node_modules/', '**/vendor/' ],
+		ignores: [ '*.php', '**/build/', '**/node_modules/', '**/vendor/', '**/.orca/' ],
 	},
 	{
 		files: [ 'tests/frontend/**/*.test.js' ],
