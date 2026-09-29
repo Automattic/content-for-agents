@@ -17,9 +17,8 @@ callbacks can supply content.
 For a published post at `/example/`, the canonical Markdown URL is
 `/example/markdown`, with an optional trailing slash. With plain permalinks,
 it is `?p=123&markdown=true`. Discovery links use the appropriate form. The
-static front page has no individual Markdown URL, so `/markdown` remains
-available as a normal page. Adding `markdown=true` to the static homepage
-still renders HTML. An old slug does not provide a hidden Markdown path.
+static front page uses `/?markdown=true`; `/markdown` remains available as a
+normal page. Its old slug does not provide a hidden Markdown path.
 
 Unprotected published posts are public. For other statuses, WordPress must
 resolve a singular post and grant the visitor read permission.
@@ -212,8 +211,9 @@ add_filter(
 );
 ```
 
-Posts and pages are enabled automatically. Enable a custom post type after it is
-registered:
+The plugin enables WordPress `post` and `page` by default. Other post types,
+including custom post types and attachments, need the `content-for-agents`
+support flag. Add it after registering the type:
 
 ```php
 add_action(

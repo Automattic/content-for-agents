@@ -12,6 +12,7 @@ use Content_For_Agents\Discovery;
 use Content_For_Agents\Loader;
 use Content_For_Agents\Markdown_Cache_Invalidator;
 use Content_For_Agents\Markdown_Endpoint;
+use Content_For_Agents\Markdown_Response;
 
 require_once __DIR__ . '/support/class-testable-markdown-endpoint.php';
 
@@ -359,9 +360,9 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * The static front page has no individual query-form Markdown URL.
+	 * The static front page uses the query endpoint and advertises it.
 	 */
-	public function test_static_front_page_query_is_unsupported(): void {
+	public function test_static_front_page_query_is_supported(): void {
 		$page_id = self::factory()->post->create(
 			array(
 				'post_status' => 'publish',
@@ -371,14 +372,17 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		update_option( 'show_on_front', 'page' );
 		update_option( 'page_on_front', $page_id );
 
-		$page = get_post( $page_id );
-		$this->assertFalse( $this->endpoint->can_serve_for_test( $page ) );
-		$this->assertFalse( $this->endpoint->can_serve_query_for_test( $page ) );
-
-		$this->go_to( add_query_arg( 'markdown', 'true', home_url( '/' ) ) );
+		$url = add_query_arg( 'markdown', 'true', home_url( '/' ) );
+		$this->go_to( $url );
 		$_GET['markdown'] = 'true';
 		$this->assertTrue( is_front_page() );
-		$this->assertNull( $this->endpoint->get_query_post_for_test() );
+		$this->assertSame( $page_id, $this->endpoint->get_query_post_for_test()->ID );
+
+		$discovery = new Discovery( new Loader() );
+		ob_start();
+		$discovery->add_markdown_alternate_link();
+		$output = (string) ob_get_clean();
+		$this->assertStringContainsString( esc_url( $url ), $output );
 	}
 
 	/**
@@ -543,6 +547,31 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * URL helpers do not advertise a custom post type until it opts in.
+	 */
+	public function test_custom_post_type_requires_markdown_support_for_urls(): void {
+		$this->configure_permalink_structure( '/%postname%/' );
+		register_post_type( 'cfa_book', array( 'public' => true ) );
+
+		try {
+			$post_id = self::factory()->post->create(
+				array(
+					'post_type'   => 'cfa_book',
+					'post_status' => 'publish',
+				)
+			);
+			$this->assertSame( '', Markdown_Endpoint::get_path_url( $post_id ) );
+			$this->assertSame( '', Markdown_Endpoint::get_query_url( $post_id ) );
+
+			add_post_type_support( 'cfa_book', 'content-for-agents' );
+			$this->assertNotSame( '', Markdown_Endpoint::get_path_url( $post_id ) );
+			$this->assertNotSame( '', Markdown_Endpoint::get_query_url( $post_id ) );
+		} finally {
+			unregister_post_type( 'cfa_book' );
+		}
+	}
+
+	/**
 	 * A page may use the root Markdown path as its permalink.
 	 */
 	public function test_get_url_preserves_page_with_markdown_slug(): void {
@@ -556,6 +585,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		);
 
 		$this->assertSame( home_url( '/markdown/markdown' ), Markdown_Endpoint::get_url( $page_id ) );
+		$this->assertTrue( $this->endpoint->can_serve_path_for_test( get_post( $page_id ) ) );
 	}
 
 	/**
@@ -627,9 +657,41 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * A static front page also remains unsupported under plain permalinks.
+	 * Saving a child clears its cached Markdown and its parent's cached Markdown.
 	 */
-	public function test_get_url_returns_empty_string_for_plain_permalink_static_front_page(): void {
+	public function test_saving_child_invalidates_parent_and_child_markdown(): void {
+		$parent_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$child_id  = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_parent' => $parent_id,
+			)
+		);
+		$group     = Markdown_Response::CACHE_GROUP;
+		wp_cache_set( 'markdown_' . $parent_id, 'Parent Markdown', $group );
+		wp_cache_set( 'markdown_' . $child_id, 'Child Markdown', $group );
+
+		wp_update_post(
+			array(
+				'ID'         => $child_id,
+				'post_title' => 'Updated child',
+			)
+		);
+
+		$this->assertFalse( wp_cache_get( 'markdown_' . $child_id, $group ) );
+		$this->assertFalse( wp_cache_get( 'markdown_' . $parent_id, $group ) );
+	}
+
+	/**
+	 * A static front page uses the query endpoint with plain permalinks.
+	 */
+	public function test_get_url_returns_query_endpoint_for_plain_permalink_static_front_page(): void {
 		$this->configure_permalink_structure( '' );
 		$page_id = self::factory()->post->create(
 			array(
@@ -640,25 +702,28 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		update_option( 'show_on_front', 'page' );
 		update_option( 'page_on_front', $page_id );
 
-		$this->assertSame( '', Markdown_Endpoint::get_url( $page_id ) );
+		$this->assertSame( add_query_arg( 'markdown', 'true', home_url( '/' ) ), Markdown_Endpoint::get_url( $page_id ) );
+		$this->assertSame( '', Markdown_Endpoint::get_path_url( $page_id ) );
 	}
 
 	/**
-	 * A static front page does not receive a root Markdown endpoint.
+	 * A static front page has no path endpoint, even when its slug is markdown.
 	 */
-	public function test_get_url_returns_empty_string_for_static_front_page(): void {
+	public function test_get_url_returns_query_endpoint_for_static_front_page(): void {
 		$this->configure_permalink_structure( '/%postname%/' );
 		$page_id = self::factory()->post->create(
 			array(
 				'post_type'   => 'page',
 				'post_status' => 'publish',
+				'post_name'   => 'markdown',
 			)
 		);
 		update_option( 'show_on_front', 'page' );
 		update_option( 'page_on_front', $page_id );
 
-		$this->assertSame( '', Markdown_Endpoint::get_url( $page_id ) );
-		$this->assertSame( '', Markdown_Endpoint::get_query_url( $page_id ) );
+		$this->assertSame( add_query_arg( 'markdown', 'true', home_url( '/' ) ), Markdown_Endpoint::get_url( $page_id ) );
+		$this->assertSame( '', Markdown_Endpoint::get_path_url( $page_id ) );
+		$this->assertFalse( $this->endpoint->can_serve_path_for_test( get_post( $page_id ) ) );
 	}
 
 	/**

@@ -44,9 +44,9 @@ integration framework or provider-specific packages.
 
 For a post with plain permalinks, the Markdown URL is
 `?p=123&markdown=true`. The query endpoint also works with pretty
-permalinks. A static front page has no Markdown URL. See the
-[plugin guide](docs/PLUGIN-GUIDE.md) for access rules, preview behavior, and
-extension points.
+permalinks. A static front page uses `/?markdown=true`, leaving `/markdown`
+available for a normal page. See the [plugin guide](docs/PLUGIN-GUIDE.md) for
+access rules, preview behavior, and extension points.
 
 If you are working from a source checkout, follow the development setup in the
 [contributor guide](docs/CONTRIBUTING.md).
