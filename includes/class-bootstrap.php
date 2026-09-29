@@ -48,9 +48,6 @@ class Bootstrap {
 		new Markdown_Cache_Invalidator( $this->loader );
 		new Discovery( $this->loader );
 		new Robots_Txt( $this->loader );
-		new LLMs_Txt( $this->loader );
-		new Llms_Txt_Cache_Invalidator( $this->loader );
-		new Settings( $this->loader );
 	}
 
 	/**

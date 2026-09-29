@@ -9,7 +9,6 @@
 namespace Content_For_Agents\Tests\Integration;
 
 use Content_For_Agents\Discovery;
-use Content_For_Agents\LLMs_Txt;
 use Content_For_Agents\Loader;
 use Content_For_Agents\Markdown_Cache_Invalidator;
 use Content_For_Agents\Markdown_Endpoint;
@@ -590,7 +589,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Discovery and the index use the query endpoint with plain permalinks.
+	 * Discovery uses the query endpoint with plain permalinks.
 	 */
 	public function test_plain_permalink_query_endpoint_is_discoverable(): void {
 		$this->configure_permalink_structure( '' );
@@ -606,7 +605,6 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 
 		$this->assertStringContainsString( 'type="text/markdown"', $output );
 		$this->assertStringContainsString( esc_url( $url ), $output );
-		$this->assertSame( $url, LLMs_Txt::get_post_markdown_url( $post ) );
 	}
 
 	/**

@@ -97,30 +97,4 @@ final class Markdown_Access {
 		 */
 		return (bool) apply_filters( 'content_for_agents_can_cache_markdown', true, $post );
 	}
-
-	/**
-	 * Whether public discovery output may use shared caches.
-	 *
-	 * Access filters may depend on visitor-specific state. When one is present,
-	 * discovery output must bypass both the object cache and HTTP shared caches.
-	 *
-	 * @return bool Whether shared discovery caching is allowed.
-	 */
-	public static function can_cache_discovery(): bool {
-		$core_cacheable = ! is_user_logged_in() && false === has_filter( 'content_for_agents_can_serve_markdown' );
-
-		if ( ! $core_cacheable ) {
-			return false;
-		}
-
-		/**
-		 * Filters whether /llms.txt may use shared caches.
-		 *
-		 * Integrations that make discovery sections visitor-specific should return
-		 * false. Returning true cannot override the core exclusions above.
-		 *
-		 * @param bool $cacheable Whether shared discovery caching is allowed.
-		 */
-		return (bool) apply_filters( 'content_for_agents_can_cache_llms_txt', true );
-	}
 }

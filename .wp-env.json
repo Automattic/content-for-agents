@@ -9,10 +9,10 @@
   "phpVersion": "8.2",
   "port": 8910,
   "testsPort": 8911,
-  "plugins": [ "." ],
+  "plugins": ["."],
   "env": {
     "tests": {
-      "plugins": [ "." ]
+      "plugins": ["."]
     }
   }
 }

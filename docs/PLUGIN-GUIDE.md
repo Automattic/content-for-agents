@@ -7,7 +7,7 @@ setup and checks, see the [contributor guide](CONTRIBUTING.md).
 The plugin supports WordPress 7.0 or newer and PHP 8.2 or newer. When a VIP
 application loader includes it on an unsupported runtime, it leaves its hooks
 unregistered and shows an administrator notice.
-Markdown and `/llms.txt` responses send `X-Content-Type-Options: nosniff` so
+Markdown responses send `X-Content-Type-Options: nosniff` so
 browsers do not interpret agent-facing text as another content type.
 The published Markdown can contain editor-authored text and output from trusted
 integration callbacks. Consumers that render it as HTML must sanitize the
@@ -18,7 +18,7 @@ rendered HTML for their own trust boundary.
 For a published post at `/example/`, the canonical Markdown URL is
 `/example/markdown`, with an optional trailing slash. With WordPress's plain
 `?p=123` permalink structure, the canonical Markdown URL is
-`?p=123&markdown=true`. Discovery links and `/llms.txt` use the appropriate form
+`?p=123&markdown=true`. Discovery links use the appropriate form
 for the active permalink structure. The static front page does not receive an
 individual Markdown URL, leaving the root `/markdown` path available for a
 normal WordPress page. A `markdown=true` parameter on the static homepage is
@@ -26,7 +26,7 @@ ignored, so WordPress continues with its normal HTML response. The page's former
 slug does not provide a hidden `/markdown` path. Private content requires
 permission to read it.
 Password-protected content requires the password or edit permission and is
-excluded from the public featured index.
+subject to the same read permission checks.
 Authenticated and password-authorized documents are not stored in the shared
 Markdown cache. The `markdown=true` query endpoint works on published singular
 URLs without authentication and is the advertised form under plain permalinks.
@@ -68,21 +68,15 @@ add_filter(
 );
 ```
 
-Registering `content_for_agents_can_serve_markdown` automatically disables shared caching for `/llms.txt`, because discovery decisions may depend on the current visitor. Integrations with other visitor-specific discovery sections can also veto that cache directly:
-
-```php
-add_filter( 'content_for_agents_can_cache_llms_txt', '__return_false' );
-```
-
 These filters can only restrict the plugin's core access and cache decisions.
 They cannot expose drafts, private posts, previews, or password-protected posts
 that WordPress would otherwise deny. Access-control integrations are responsible
-for invalidating the Markdown document and `/llms.txt` caches when their gating
+for invalidating the Markdown document cache when their gating
 configuration changes.
 
 Output includes YAML metadata, a single document title heading, and converted content. Published
 singular HTML pages advertise their alternate Markdown URL when supported. The
-front page advertises `/llms.txt`. The plugin preserves modern, nested, and
+plugin preserves modern, nested, and
 legacy quotes, citations, lists, tables, links, images, and code. Audio and video
 sources and lite YouTube embeds become Markdown links, with captions retained.
 Core embeds use WordPress's resolved preview when available and retain their
@@ -124,30 +118,27 @@ content transformations and `content_for_agents_can_serve_markdown` for access
 control. See [Site integrations](INTEGRATIONS.md) for a canonical URL retirement
 example.
 
-Markdown and `/llms.txt` responses include a `Content-Signal` header. Its
+Markdown responses include a `Content-Signal` header. Its
 `ai-train`, `search`, and `ai-input` values default to `yes` and can be
 configured with the `content_for_agents_content_signal` option.
 
-The plugin handles `/markdown` and `/llms.txt` directly during `parse_request`.
-The Markdown endpoint reads WordPress's normalized request path. The
+The plugin handles `/markdown` directly during `parse_request`. The
 `markdown=true` query endpoint runs during `template_redirect`, after
-WordPress has resolved the post and any preview revision. `/llms.txt`
-compares the requested URL path with its home URL so it also works when plain
-permalinks leave the normalized request empty. This avoids activation-time
-rewrite-rule flushes, which are not reliable for VIP application-loaded
-plugins. Markdown paths use VIP's cached URL lookup first. If it misses a
-nested page, WordPress's page-path lookup is used only when that page's
-permalink exactly matches the requested path. The existing access check still
-applies. Local development uses WordPress core URL lookup when VIP's API is
-unavailable. WordPress's `robots_txt` filter
-adds discovery where the platform permits it; VIP test-domain crawler
-restrictions still apply. Actual edge-cache refresh requires deployment
-verification.
+WordPress has resolved the post and any preview revision. This avoids
+activation-time rewrite-rule flushes, which are not reliable for VIP
+application-loaded plugins. Markdown paths use VIP's cached URL lookup first.
+If it misses a nested page, WordPress's page-path lookup is used only when
+that page's permalink exactly matches the requested path. The existing access
+check still applies. Local development uses WordPress core URL lookup when
+VIP's API is unavailable. The `robots_txt` filter adds Content-Signal guidance
+where the platform permits it; VIP test-domain crawler restrictions still
+apply. Actual edge-cache refresh requires deployment verification.
 
 ## Extend the base
 
-All PHP classes live in `Content_For_Agents`. Hook names, options, cache groups,
-and the REST namespace use `content_for_agents` / `content-for-agents`.
+All PHP classes live in `Content_For_Agents`. Public hooks, the
+Content-Signal option, and cache groups use `content_for_agents` or
+`content-for-agents` identifiers.
 
 Register a block callback before `init` priority 5. Integrations should register
 block types on `init`, after the plugin has installed its metadata filter:
@@ -178,9 +169,9 @@ A block can alternatively declare metadata in `block.json`:
 
 ```json
 {
-	"contentForAgents": {
-		"callback": "Example\\Markdown::convert"
-	}
+  "contentForAgents": {
+    "callback": "Example\\Markdown::convert"
+  }
 }
 ```
 
@@ -196,12 +187,8 @@ metadata path. Preserve this distinction when adding integrations.
 | `content_for_agents_after_markdown`                                   | Filter the body when serving a document. Direct `post_to_markdown()` calls do not run this filter.                                      |
 | `content_for_agents_can_serve_markdown`                               | Veto Markdown response or discovery access. Receives the post and `response` or `discovery` context. Cannot override core protection.   |
 | `content_for_agents_can_cache_markdown`                               | Veto shared caching for visitor-specific Markdown responses. Receives the post. Cannot override core cache exclusions.                  |
-| `content_for_agents_can_cache_llms_txt`                               | Veto shared object and HTTP caching for visitor-specific `/llms.txt` output. Cannot override core cache exclusions.                     |
 | `content_for_agents_authors`                                          | Return author entries containing `name` and optional `job_title` and `link`; receives the post.                                         |
 | `content_for_agents_frontmatter`                                      | Filter the metadata array; receives the post.                                                                                           |
-| `content_for_agents_llms_txt_sections`                                | Append section arrays with `slug`, `title`, `links`, and optional `description`. Duplicate slugs keep the first section.                |
-| `content_for_agents_additional_resources_blocks`                      | Filter resource blocks containing `id`, `title`, and `body`.                                                                            |
-| `content_for_agents_settings_defaults`                                | Supply defaults for unsaved settings without overwriting saved values.                                                                  |
 | `content_for_agents_set_context` / `content_for_agents_clear_context` | Set or clear a conversion context. Read it with `Block_Markdown_Registry::get_context()`. Use `try/finally` to clear it after failures. |
 
 ### Common filter examples
@@ -234,58 +221,6 @@ add_filter(
 );
 ```
 
-Append a small link section directly to `/llms.txt`:
-
-```php
-add_filter(
-	'content_for_agents_llms_txt_sections',
-	static function ( array $sections ): array {
-		$sections[] = array(
-			'slug'  => 'policies',
-			'title' => 'Policies',
-			'links' => array(
-				array(
-					'title' => 'Editorial policy',
-					'url'   => home_url( '/editorial-policy/' ),
-				),
-			),
-		);
-		return $sections;
-	}
-);
-```
-
-Additional resource blocks become subsections under Additional Resources.
-Defaults provide editable starter values only when no saved value overrides
-them:
-
-```php
-add_filter(
-	'content_for_agents_additional_resources_blocks',
-	static function ( array $blocks ): array {
-		$blocks[] = array(
-			'id'    => 'help',
-			'title' => 'Help',
-			'body'  => 'Contact the site team for help using this content.',
-		);
-		return $blocks;
-	}
-);
-
-add_filter(
-	'content_for_agents_settings_defaults',
-	static function ( array $defaults ): array {
-		$defaults['site_summary'] = 'A concise description of this site.';
-		return $defaults;
-	}
-);
-```
-
-If any of these filters reads data maintained outside the post or plugin
-settings, invalidate the affected Markdown documents or `/llms.txt` when that
-data changes. Returning different filtered output does not invalidate an
-already cached response.
-
 Posts and pages are enabled automatically. Enable a custom post type after it is
 registered:
 
@@ -300,10 +235,8 @@ add_action(
 ```
 
 An integration that owns the post type can instead include
-`content-for-agents` in its `register_post_type()` `supports` array. Declare
-the separate `content-for-agents-llms-txt` support when changes to that post
-type affect content the integration contributes to the index. Provider-specific
-data, queries, and dependencies remain outside the base plugin.
+`content-for-agents` in its `register_post_type()` `supports` array.
+Provider-specific data, queries, and dependencies remain outside the base plugin.
 
 ### Cache invalidation
 
@@ -311,33 +244,25 @@ When related data changes, integrations identify the affected article IDs and ca
 
 ```php
 \Content_For_Agents\Markdown_Cache_Invalidator::invalidate_post( $article_id );
-\Content_For_Agents\Llms_Txt_Cache_Invalidator::purge_cache();
 ```
 
-The first call clears the article and its parent, including the `/markdown`
+The call clears the article and its parent, including the `/markdown`
 paths and query endpoint in supported page-cache purges. Moving a child also
 clears its former parent. Category/tag edits and author display-name changes
 clear affected documents, with the first 100 handled immediately and further
 batches scheduled through WordPress for VIP Cron Control.
 The 100-document limit bounds each callback's work. VIP queues and deduplicates
-URL purge requests; this does not synchronously purge the edge cache. The second
-call clears `/llms.txt`. Call before permanent deletion if a purge needs the old
-permalink. A callback that only generates different output does not itself
+URL purge requests; this does not synchronously purge the edge cache. Call
+before permanent deletion if a purge needs the old permalink. A callback that only generates different output does not itself
 invalidate a previously cached response.
 
-## Metadata and settings contracts
+## Metadata and Content-Signal contracts
 
 Frontmatter accepts nested PHP arrays (maps or lists), strings, finite numbers,
 booleans, and null, with a maximum nesting depth of 32. Empty arrays render as
 empty lists. Objects and resources are unsupported. Mapping keys and strings
 are quoted; Unicode and escaped line breaks survive a YAML round trip.
 
-Settings defaults are calculated when read. Saving a section stores that
-section's overrides without copying defaults or filtered resources from other
-sections into the option. The additional-resources filter still represents
-integration-maintained output; use the defaults filter for editable starter text.
-
 Content-Signal accepts `yes`/`no`, `true`/`false`, booleans, and `1`/`0` for
 `ai-train`, `search`, and `ai-input`. Unknown keys and values are omitted. The
-default is `yes` for all three signals. Legacy settings migration and filter
-translation remain outside this base plugin.
+default is `yes` for all three signals.
