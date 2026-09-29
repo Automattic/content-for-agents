@@ -29,6 +29,7 @@ Run these checks after making relevant changes:
 
 ```sh
 composer validate --strict
+composer check-platform-reqs
 composer phpcs
 composer test:unit
 npm run format:check
