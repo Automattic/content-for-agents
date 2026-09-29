@@ -96,12 +96,12 @@ singular request. It does not perform direct post-ID fallback.
 
 ## Choose the right test layer
 
-| Layer                  | What it verifies                                                               | Command or method                    |
-| ---------------------- | ------------------------------------------------------------------------------ | ------------------------------------ |
-| PHP unit               | Isolated behavior that does not require WordPress                              | `composer test:unit`                 |
-| WordPress integration  | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`           |
-| Manual UI              | Public Markdown output in a real browser                                       | Exercise public URLs in a browser    |
-| VIP deployment         | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application |
+| Layer                 | What it verifies                                                               | Command or method                    |
+| --------------------- | ------------------------------------------------------------------------------ | ------------------------------------ |
+| PHP unit              | Isolated behavior that does not require WordPress                              | `composer test:unit`                 |
+| WordPress integration | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`           |
+| Manual UI             | Public Markdown output in a real browser                                       | Exercise public URLs in a browser    |
+| VIP deployment        | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application |
 
 Start `wp-env` before running the integration suite. Its bootstrap loads the
 base plugin. Deployment checks cannot be fully reproduced by `wp-env`.
@@ -120,10 +120,15 @@ the complete set:
 composer validate --strict
 composer phpcs
 composer test:unit
+npm run format:check
 npx wp-env start
 npm run test:integration
 git diff --check
 ```
+
+Use `composer phpcs-fix` to apply PHP style fixes and `npm run format` to format
+Markdown, JSON, and YAML files. The exact-output conversion fixtures are kept in
+their original form so the tests can compare them with generated Markdown.
 
 ## Common change recipes
 

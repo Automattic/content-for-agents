@@ -31,6 +31,7 @@ Run these checks after making relevant changes:
 composer validate --strict
 composer phpcs
 composer test:unit
+npm run format:check
 npx wp-env start
 npm run test:integration
 git diff --check

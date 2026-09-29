@@ -169,9 +169,9 @@ A block can alternatively declare metadata in `block.json`:
 
 ```json
 {
-	"contentForAgents": {
-		"callback": "Example\\Markdown::convert"
-	}
+  "contentForAgents": {
+    "callback": "Example\\Markdown::convert"
+  }
 }
 ```
 

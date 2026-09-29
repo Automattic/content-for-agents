@@ -1,0 +1,6 @@
+/build/
+/node_modules/
+/vendor/
+/.orca/
+/tests/fixtures/linked-content.json
+/tests/fixtures/block-gauntlet.md
