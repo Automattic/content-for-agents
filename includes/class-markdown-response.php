@@ -144,7 +144,7 @@ class Markdown_Response {
 	}
 
 	/**
-	 * Get the Content-Signal header value from options.
+	 * Get the Content-Signal value from site options and code-level overrides.
 	 *
 	 * @return string Header value (e.g. ai-train=yes, search=yes, ai-input=yes).
 	 */
@@ -157,6 +157,16 @@ class Markdown_Response {
 				'ai-input' => 'yes',
 			)
 		);
+
+		/**
+		 * Filters the site-wide Content-Signal values used by Markdown and robots.txt.
+		 *
+		 * Return an array keyed by ai-train, search, and ai-input. An empty array
+		 * suppresses the signal. Values are normalized below.
+		 *
+		 * @param mixed $options Stored values, or the defaults when none are saved.
+		 */
+		$options = apply_filters( 'content_for_agents_content_signal_values', $options );
 
 		if ( ! is_array( $options ) ) {
 			return '';

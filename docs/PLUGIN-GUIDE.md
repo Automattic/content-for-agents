@@ -120,7 +120,9 @@ example.
 
 Markdown responses include a `Content-Signal` header. Its
 `ai-train`, `search`, and `ai-input` values default to `yes` and can be
-configured with the `content_for_agents_content_signal` option.
+configured with the `content_for_agents_content_signal` option or the
+`content_for_agents_content_signal_values` filter. The filter also controls
+the `robots.txt` directive.
 
 The plugin handles `/markdown` directly during `parse_request`. The
 `markdown=true` query endpoint runs during `template_redirect`, after
@@ -189,6 +191,7 @@ metadata path. Preserve this distinction when adding integrations.
 | `content_for_agents_can_cache_markdown`                               | Veto shared caching for visitor-specific Markdown responses. Receives the post. Cannot override core cache exclusions.                  |
 | `content_for_agents_authors`                                          | Return author entries containing `name` and optional `job_title` and `link`; receives the post.                                         |
 | `content_for_agents_frontmatter`                                      | Filter the metadata array; receives the post.                                                                                           |
+| `content_for_agents_content_signal_values`                            | Override the site-wide Content-Signal values for Markdown headers and `robots.txt`. Receives the stored values or defaults.             |
 | `content_for_agents_set_context` / `content_for_agents_clear_context` | Set or clear a conversion context. Read it with `Block_Markdown_Registry::get_context()`. Use `try/finally` to clear it after failures. |
 
 ### Common filter examples
@@ -265,4 +268,20 @@ are quoted; Unicode and escaped line breaks survive a YAML round trip.
 
 Content-Signal accepts `yes`/`no`, `true`/`false`, booleans, and `1`/`0` for
 `ai-train`, `search`, and `ai-input`. Unknown keys and values are omitted. The
-default is `yes` for all three signals.
+default is `yes` for all three signals. The filter receives the option value
+before validation and takes precedence over it. Return an empty array to omit
+the signal from both outputs. Use a consistent site-wide value so cached
+responses and `robots.txt` express the same policy:
+
+```php
+add_filter(
+	'content_for_agents_content_signal_values',
+	static function (): array {
+		return array(
+			'ai-train' => 'no',
+			'search'   => 'yes',
+			'ai-input' => 'no',
+		);
+	}
+);
+```
