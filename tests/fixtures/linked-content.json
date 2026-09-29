@@ -2,31 +2,16 @@
   {
     "name": "inline link",
     "html": "<p><a href=\"/destination/\">Text</a></p>",
-    "markdown": "[Text](/destination/)",
-    "text": "Text",
-    "links": [ "/destination/" ],
-    "headings": [],
-    "listItems": [],
-    "images": []
+    "markdown": "[Text](/destination/)"
   },
   {
     "name": "linked cover content",
     "html": "<a href=\"/destination/\"><div><img src=\"https://example.com/image.png\" alt=\"Image\"><h3>Heading</h3><p>Description</p></div></a>",
-    "markdown": "[![Image](https://example.com/image.png)](/destination/)\n\n### [Heading](/destination/)\n\n[Description](/destination/)",
-    "text": "Heading Description",
-    "links": [ "/destination/", "/destination/", "/destination/" ],
-    "headings": [ "Heading" ],
-    "listItems": [],
-    "images": [ "Image" ]
+    "markdown": "[![Image](https://example.com/image.png)](/destination/)\n\n### [Heading](/destination/)\n\n[Description](/destination/)"
   },
   {
     "name": "linked list content",
     "html": "<a href=\"/destination/\"><div><ul><li>One</li><li>Two</li></ul><p>After</p></div></a>",
-    "markdown": "- [One](/destination/)\n- [Two](/destination/)\n\n[After](/destination/)",
-    "text": "One Two After",
-    "links": [ "/destination/", "/destination/", "/destination/" ],
-    "headings": [],
-    "listItems": [ "One", "Two" ],
-    "images": []
+    "markdown": "- [One](/destination/)\n- [Two](/destination/)\n\n[After](/destination/)"
   }
 ]

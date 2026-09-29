@@ -160,9 +160,9 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Link fixtures are also parsed by the frontend Markdown rendering test.
+	 * Link fixtures verify the Markdown generated from rendered HTML.
 	 */
-	public function test_links_match_rendering_fixtures(): void {
+	public function test_links_match_conversion_fixtures(): void {
 		$fixtures = json_decode( (string) file_get_contents( dirname( __DIR__ ) . '/fixtures/linked-content.json' ), true );
 		foreach ( $fixtures as $fixture ) {
 			$this->assertSame(

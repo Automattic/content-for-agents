@@ -4,7 +4,7 @@
 
 Content for Agents is a WordPress VIP plugin that publishes supported content through `{permalink}/markdown`, falls back to a `markdown=true` query endpoint for plain permalinks. The query endpoint also supports permission-checked non-public content. The plugin is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
 
-The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required for frontend checks and release packaging.
+The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required for the local WordPress integration environment and release packaging.
 
 ## Repository layout
 
@@ -31,9 +31,6 @@ Run these checks after making relevant changes:
 composer validate --strict
 composer phpcs
 composer test:unit
-npm run test:frontend
-npm run lint:js
-npm run format:check
 npx wp-env start
 npm run test:integration
 git diff --check
