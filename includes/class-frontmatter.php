@@ -40,7 +40,6 @@ class Frontmatter {
 
 		$data = apply_filters( 'content_for_agents_frontmatter', $data, $post );
 
-		// Remove empty values.
 		$data = array_filter( $data, fn( $v ) => '' !== $v && array() !== $v && null !== $v );
 
 		$yaml = $this->to_yaml( $data );

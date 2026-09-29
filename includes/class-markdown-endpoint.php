@@ -143,7 +143,7 @@ class Markdown_Endpoint {
 
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
-			|| ( 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === $post->ID )
+			|| self::is_static_front_page( $post )
 		) {
 			return '';
 		}

@@ -9,22 +9,9 @@
 namespace Content_For_Agents;
 
 /**
- * Static registry mapping block names to markdown callbacks.
- *
- * Other plugins register their callbacks on the
- * `content_for_agents_register_block_callbacks` action, which fires
- * at init priority 5. Each callback receives the parsed block array and
- * the WP_Post being converted, and returns a markdown string.
- *
- * Example:
- *   add_action( 'content_for_agents_register_block_callbacks', function() {
- *       Block_Markdown_Registry::register(
- *           'my-plugin/my-block',
- *           function( array $block, \WP_Post $post ): string {
- *               return '> ' . ( $block['attrs']['quote'] ?? '' );
- *           }
- *       );
- *   } );
+ * Maps block names to Markdown callbacks. Register callbacks on
+ * `content_for_agents_register_block_callbacks` at init priority 5.
+ * Each callback receives a parsed block and its post.
  *
  * @package Content_For_Agents
  */

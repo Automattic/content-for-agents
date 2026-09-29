@@ -2,7 +2,7 @@
 
 ## Project purpose
 
-Content for Agents is a WordPress VIP plugin that publishes supported content through `{permalink}/markdown`, falls back to a `markdown=true` query endpoint for plain permalinks. The query endpoint also supports permission-checked non-public content. The plugin is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
+Content for Agents is a WordPress VIP plugin that publishes posts and pages as Markdown. Pretty permalinks use `{permalink}/markdown`; plain permalinks use `?markdown=true`. WordPress permissions govern non-public content. The base plugin is provider-neutral; PRC compatibility, provider adapters, and VIP integration packaging belong in separate plugins.
 
 The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required for the local WordPress integration environment and release packaging.
 

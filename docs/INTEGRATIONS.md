@@ -1,28 +1,23 @@
 # Site integrations
 
-Content for Agents checks WordPress publication, password, preview, and post type
-rules before it serves or advertises Markdown. A site can apply additional
-visibility rules with `content_for_agents_can_serve_markdown`. Return `false` to
-veto a post. The filter runs for Markdown responses and per-page discovery. It cannot
-override the plugin's core access checks.
+Content for Agents applies WordPress status, password, preview, and post type
+rules before serving or advertising Markdown. Sites can add visibility rules
+with `content_for_agents_can_serve_markdown`. Return `false` to hide a post
+from both responses and per-page discovery. The filter cannot grant access.
 
 ## Redirected or removed canonical URLs
 
-A published post can have a canonical URL that a redirect manager, SEO plugin,
-or custom site code redirects or marks as gone. The Markdown endpoint uses a
-different URL, so that URL rule might not run for it. The general rule is: when
-the canonical HTML URL no longer serves the post's content, veto its Markdown
-response and discovery entry. Check the canonical URL through the site's own
-read-only rule matcher. This avoids hard-coded post IDs and self-HTTP requests.
-Add the integration to a site plugin or MU plugin that loads alongside Content
-for Agents.
+A redirect manager, SEO plugin, or site code may redirect a post's canonical
+HTML URL or mark it as gone. Its separate Markdown URL may remain accessible.
+If the HTML URL no longer serves the post, veto its Markdown response and
+discovery link. Use the site's read-only rule matcher to check the canonical
+URL. Put the filter in a site plugin or MU plugin that loads with Content for
+Agents.
 
-The filter and access decision are the same for any redirect system. Only the
-matcher inside the callback changes. This example uses Rank Math's active
-redirection matcher. It blocks Markdown and discovery for any canonical URL with
-an active rule, including redirects and 410 Gone rules. If Rank Math or its
-redirections module is not active, the callback leaves Content for Agents'
-normal decision in place.
+The filter works with any redirect system; only its matcher changes. This
+example uses Rank Math's active-rule matcher, including redirects and 410 Gone
+rules. If its redirections module is inactive, the callback keeps the normal
+access decision.
 
 ```php
 add_filter(
