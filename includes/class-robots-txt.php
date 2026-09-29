@@ -29,7 +29,6 @@ class Robots_Txt {
 	 */
 	public function __construct( Loader $loader ) {
 		$loader->add_filter( 'robots_txt', $this, 'add_content_signal_directive', 5, 2 );
-		$loader->add_filter( 'robots_txt', $this, 'add_llms_txt_reference', 5, 2 );
 	}
 
 	/**
@@ -85,48 +84,5 @@ class Robots_Txt {
 		// No `User-agent: *` group present — emit our own group so the directive still has a valid scope.
 		$prefix = "User-agent: *\n" . $directive . "\n\n";
 		return $prefix . (string) $output;
-	}
-
-	/**
-	 * Inject an agent-index comment referencing /llms.txt (not a Sitemap directive).
-	 *
-	 * @hook robots_txt
-	 *
-	 * @param string $output The robots.txt output.
-	 * @param int    $is_public Whether the site is public.
-	 * @return string
-	 */
-	public function add_llms_txt_reference( $output, $is_public ): string {
-		if ( ! $is_public ) {
-			return (string) $output;
-		}
-
-		$llms_url = home_url( '/llms.txt' );
-		$marker   = '# Agent index';
-
-		if ( false !== strpos( (string) $output, $marker ) ) {
-			return (string) $output;
-		}
-
-		$block = "# Agent index: machine-readable directory for AI agents (noindex; not for search crawlers):\n# {$llms_url}\n";
-
-		$lines    = preg_split( '/\R/', (string) $output );
-		$injected = false;
-
-		if ( is_array( $lines ) ) {
-			foreach ( $lines as $i => $line ) {
-				if ( preg_match( '/^\s*User-agent:\s*\*\s*$/i', $line ) ) {
-					array_splice( $lines, $i + 1, 0, array( $block ) );
-					$injected = true;
-					break;
-				}
-			}
-		}
-
-		if ( $injected && is_array( $lines ) ) {
-			return implode( "\n", $lines );
-		}
-
-		return "User-agent: *\n{$block}\n" . (string) $output;
 	}
 }

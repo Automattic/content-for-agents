@@ -5,8 +5,8 @@
 # Content for Agents
 
 Content for Agents is a WordPress VIP plugin that publishes supported content at
-`/markdown` paths, supports a `?markdown=true` query endpoint, and
-provides `/llms.txt` discovery. It requires WordPress 7.0 or newer, PHP 8.2 or
+`/markdown` paths, supports a `?markdown=true` query endpoint, and advertises Markdown
+alternates on singular HTML pages. It requires WordPress 7.0 or newer, PHP 8.2 or
 newer, and the WordPress VIP platform runtime.
 WordPress checks these requirements during normal activation. The plugin also
 skips loading and shows an administrator notice when included through an
@@ -24,10 +24,7 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
   and WordPress validates preview state and nonces.
 - Converts nested Block Editor blocks, Classic Editor HTML, and posts that mix
   blocks with freeform HTML to readable Markdown.
-- Publishes a configurable `/llms.txt` index and advertises Markdown and the
-  index through HTML discovery links.
-- Provides settings for the site summary, About links, categories, featured
-  posts, and additional resources.
+- Advertises Markdown alternatives on supported singular HTML pages.
 - Uses WordPress VIP cache invalidation and keeps authenticated and
   password-authorized responses out of shared caches while enforcing access to
   published, private, and password-protected content.
@@ -64,12 +61,8 @@ authenticated draft requests and preview revisions that WordPress has resolved;
 WordPress also validates preview nonces. Authenticated and other non-public
 responses are kept out of shared caches.
 
-If you are working from a source checkout, follow the build instructions in the
+If you are working from a source checkout, follow the development setup in the
 [contributor guide](docs/CONTRIBUTING.md).
-
-Use **Settings → Content for Agents** to edit the site summary, About links,
-categories, featured posts, and additional resources. The site name and tagline
-provide neutral defaults.
 
 ## Documentation
 

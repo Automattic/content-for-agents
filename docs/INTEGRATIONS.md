@@ -3,9 +3,8 @@
 Content for Agents checks WordPress publication, password, preview, and post type
 rules before it serves or advertises Markdown. A site can apply additional
 visibility rules with `content_for_agents_can_serve_markdown`. Return `false` to
-veto a post. The filter runs for both Markdown responses and `/llms.txt`
-discovery, so the two surfaces follow the same site policy. It cannot override
-the plugin's core access checks.
+veto a post. The filter runs for Markdown responses and per-page discovery. It cannot
+override the plugin's core access checks.
 
 ## Redirected or removed canonical URLs
 
@@ -60,7 +59,5 @@ that system's read-only check of the canonical URL. Keep the same filter so
 Markdown responses and discovery remain aligned. Test a live page, a redirected
 page, a removed page, and an inactive rule after installing the integration.
 
-An access filter may depend on the visitor, so registering one disables shared
-`/llms.txt` caching. On sites with many posts, profile the matcher during
-discovery and use a site-owned cache or batch lookup if needed. Invalidate that
-data when the redirect rules change.
+On sites with many posts, profile the matcher and use a site-owned cache or
+batch lookup if needed. Invalidate that data when redirect rules change.

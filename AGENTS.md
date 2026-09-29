@@ -2,17 +2,15 @@
 
 ## Project purpose
 
-Content for Agents is a WordPress VIP plugin that publishes supported content through `{permalink}/markdown`, falls back to a `markdown=true` query endpoint for plain permalinks, and provides `/llms.txt` discovery. The query endpoint also supports permission-checked non-public content. The plugin is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
+Content for Agents is a WordPress VIP plugin that publishes supported content through `{permalink}/markdown`, falls back to a `markdown=true` query endpoint for plain permalinks. The query endpoint also supports permission-checked non-public content. The plugin is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
 
-The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required only to develop and build the settings interface.
+The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required for frontend checks and release packaging.
 
 ## Repository layout
 
 - `content-for-agents.php` is the plugin entry point.
 - The entry point maps top-level plugin classes to files in `includes/`.
 - `includes/` contains the PHP implementation in the `Content_For_Agents` namespace.
-- `src/settings/` contains the TypeScript settings application.
-- `build/settings/` contains generated production assets loaded by WordPress.
 - `README.md` provides the project overview; `docs/PLUGIN-GUIDE.md` documents behavior and public extension contracts.
 
 ## Development setup
@@ -34,30 +32,24 @@ composer validate --strict
 composer phpcs
 composer test:unit
 npm run test:frontend
-npm run typecheck
 npm run lint:js
 npm run format:check
-npm run build
 npx wp-env start
 npm run test:integration
 git diff --check
 ```
 
-CI verifies that the required production assets can be generated from source.
-
 ## Generated files and dependencies
 
-- Do not commit `build/`. Change `src/settings/` and run `npm run build`; release packaging must generate and include the resulting assets.
 - Do not commit `vendor/`. Composer installs development-only coding-standard tools, and the deployed plugin does not load Composer's autoloader.
 - Keep the autoloader limited to direct classes in `Content_For_Agents`. Nested namespaces belong to integration plugins with their own loaders.
 - Do not commit `node_modules/`.
-- Keep runtime WordPress packages externalized. WordPress provides them through the dependencies listed in `build/settings/index.asset.php`.
 
 ## Implementation constraints
 
 - Keep public PHP classes in the `Content_For_Agents` namespace and public identifiers under `content_for_agents` or `content-for-agents`.
-- Preserve the extension contracts documented in `docs/PLUGIN-GUIDE.md`. Treat changes to hooks, option names, REST routes, metadata, cache groups, and callback precedence as breaking changes.
-- Do not add legacy PRC aliases, settings migration, provider-specific logic, or integration-framework packaging unless the task explicitly covers that work.
+- Preserve the extension contracts documented in `docs/PLUGIN-GUIDE.md`. Treat changes to hooks, option names, metadata, cache groups, and callback precedence as breaking changes.
+- Do not add legacy PRC aliases, provider-specific logic, or integration-framework packaging unless the task explicitly covers that work.
 - The plugin requires VIP URL lookup, cache purge, and Cron Control APIs. Do not add silent non-VIP fallbacks that alter production behavior.
 - Do not rely on activation hooks or stored rewrite rules. VIP application loaders may include the plugin during `plugins_loaded`.
 - Use `/markdown` as the canonical, discoverable individual document retrieval form with pretty permalinks and `markdown=true` as the canonical fallback with plain permalinks. The query endpoint otherwise requires permission to read non-public posts.
@@ -70,4 +62,3 @@ CI verifies that the required production assets can be generated from source.
 - Use US English in new documentation and comments.
 - Follow WordPress PHP conventions already present in the repository.
 - Keep changes focused and avoid adding abstractions until more than one implementation needs them.
-- Use accessible WordPress components and target WCAG 2.2 Level AA for settings UI changes.

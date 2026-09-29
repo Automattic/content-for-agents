@@ -41,7 +41,6 @@ autoloader.
 composer install
 nvm use
 npm ci
-npm run build
 npx wp-env start
 ```
 
@@ -51,9 +50,9 @@ URL it prints. Sign in at
 `/wp-admin/` with the default `wp-env` credentials, username `admin` and
 password `password`. The WordPress test environment uses port `8911` by default.
 
-Run `npx wp-env stop` when the environments are no longer needed. Generated
-settings assets, dependencies, test results, browser artifacts, and ZIP files
-are ignored and must not be committed.
+Run `npx wp-env stop` when the environments are no longer needed. Installed
+dependencies, test results, browser artifacts, and ZIP files are ignored and
+must not be committed.
 
 ## Architecture and request lifecycle
 
@@ -63,12 +62,12 @@ The plugin deliberately uses a small, direct bootstrap:
 content-for-agents.php
   -> plugins_loaded: Bootstrap creates and registers the modules
   -> init: supported post types and block callbacks are registered
-  -> parse_request: /markdown and /llms.txt requests are handled
+  -> parse_request: /markdown requests are handled
   -> template_redirect: the markdown=true query endpoint is handled
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
-  -> cache invalidators: affected Markdown URLs and /llms.txt are purged
+  -> cache invalidators: affected Markdown URLs are purged
 ```
 
 The main responsibilities are divided as follows:
@@ -79,19 +78,16 @@ The main responsibilities are divided as follows:
 | Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                                                 |
 | Block and HTML conversion       | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`, `Html_To_Markdown_Converter` |
 | Document metadata               | `Frontmatter`                                                                                            |
-| Discovery                       | `Discovery`, `Robots_Txt`, `LLMs_Txt`                                                                    |
-| Cache invalidation              | `Markdown_Cache_Invalidator`, `Llms_Txt_Cache_Invalidator`                                               |
-| Admin interface and REST routes | `Settings` and `src/settings/`                                                                           |
+| Discovery                       | `Discovery`, `Robots_Txt`                                                                                |
+| Cache invalidation              | `Markdown_Cache_Invalidator`                                                                             |
 
 Public PHP classes are direct members of the `Content_For_Agents` namespace.
 Integration plugins use their own namespaces and autoloaders. Preserve the
 extension contracts in the plugin guide when changing hooks, identifiers,
-callback precedence, REST routes, options, metadata, or cache behavior.
+callback precedence, options, metadata, or cache behavior.
 
-The two public endpoints are handled directly during `parse_request`.
-`/markdown` uses WordPress's normalized request path; `/llms.txt` compares URL
-paths so it continues to work when plain permalinks leave the normalized request
-empty. Do not replace this with stored rewrite rules or an activation hook. VIP
+The `/markdown` endpoint is handled directly during `parse_request` using
+WordPress's normalized request path. Do not replace this with stored rewrite rules or an activation hook. VIP
 application-loaded plugins are not guaranteed to run activation hooks when
 deployed. Individual documents use `/markdown` with pretty permalinks and the
 `markdown=true` query endpoint with plain permalinks. The query
@@ -101,14 +97,14 @@ singular request. It does not perform direct post-ID fallback.
 
 ## Choose the right test layer
 
-| Layer                  | What it verifies                                                               | Command or method                            |
-| ---------------------- | ------------------------------------------------------------------------------ | -------------------------------------------- |
-| PHP unit               | Isolated behavior that does not require WordPress                              | `composer test:unit`                         |
-| WordPress integration  | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`                   |
-| Frontend unit          | Settings UI behavior, search, and save state                                   | `npm run test:frontend`                      |
-| Frontend static checks | TypeScript types, linting, formatting, and settings compilation                | npm checks listed below                      |
-| Manual UI              | The settings screen and public Markdown output in a real browser               | Exercise the UI and public URLs in a browser |
-| VIP deployment         | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application         |
+| Layer                  | What it verifies                                                               | Command or method                    |
+| ---------------------- | ------------------------------------------------------------------------------ | ------------------------------------ |
+| PHP unit               | Isolated behavior that does not require WordPress                              | `composer test:unit`                 |
+| WordPress integration  | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`           |
+| Frontend unit          | Markdown rendering behavior                                                    | `npm run test:frontend`              |
+| Frontend static checks | JavaScript linting and formatting                                              | npm checks listed below              |
+| Manual UI              | Public Markdown output in a real browser                                       | Exercise public URLs in a browser    |
+| VIP deployment         | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application |
 
 Start `wp-env` before running the integration suite. Its bootstrap loads the
 base plugin. Deployment checks cannot be fully reproduced by `wp-env`.
@@ -128,30 +124,18 @@ composer validate --strict
 composer phpcs
 composer test:unit
 npm run test:frontend
-npm run typecheck
 npm run lint:js
 npm run format:check
-npm run build
 npx wp-env start
 npm run test:integration
 git diff --check
 ```
 
-CI runs the same categories of checks and confirms that the required settings
-assets can be generated from source.
-
 ## Common change recipes
 
 - To support a custom block, use the registry or block metadata described in
   [Extend the base](PLUGIN-GUIDE.md#extend-the-base).
-- To expose another post type, add the `content-for-agents` support flag. Add
-  `content-for-agents-llms-txt` when changes to that type affect discovery.
-- To add an `/llms.txt` section, filter
-  `content_for_agents_llms_txt_sections` using the documented section shape.
-- To provide editable starter settings, use
-  `content_for_agents_settings_defaults`. Use
-  `content_for_agents_additional_resources_blocks` for integration-maintained
-  resources.
+- To expose another post type, add the `content-for-agents` support flag.
 - When related data changes, identify the affected post IDs and use the public
   cache invalidators described in [Cache invalidation](PLUGIN-GUIDE.md#cache-invalidation).
 - Provider-specific compatibility belongs in a separately loaded plugin, not

@@ -30,18 +30,6 @@ class Discovery {
 	 * @hook wp_head
 	 */
 	public function add_markdown_alternate_link() {
-		if ( is_front_page() ) {
-			$llms_txt_url = home_url( '/llms.txt' );
-			printf(
-				'<link rel="llms-txt" href="%s">' . "\n",
-				esc_url( $llms_txt_url )
-			);
-			printf(
-				'<link rel="alternate" type="text/plain" href="%s">' . "\n",
-				esc_url( $llms_txt_url )
-			);
-		}
-
 		if ( ! is_singular() ) {
 			return;
 		}
