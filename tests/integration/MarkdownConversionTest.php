@@ -45,13 +45,6 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * The registration action remains available to integration plugins.
-	 */
-	public function test_block_registry_callback_is_registered_during_init(): void {
-		$this->assertTrue( Block_Markdown_Registry::has( 'content-for-agents/test-block' ) );
-	}
-
-	/**
 	 * Registered block callbacks participate in post conversion.
 	 */
 	public function test_registered_block_callback_converts_post_content(): void {

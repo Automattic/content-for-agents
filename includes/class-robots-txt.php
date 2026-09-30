@@ -1,12 +1,7 @@
 <?php
 
 /**
- * Robots.txt integration for the Cloudflare "Content Signals" proposal.
- *
- * Injects `Content-Signal:` directive lines into the site's robots.txt body
- * so crawlers and AI agents that honor the proposal can discover the site's
- * stance on AI training, AI input, and search use without first having to
- * fetch a markdown response and inspect HTTP headers.
+ * Adds the site's Content-Signal values to robots.txt.
  *
  * @see https://developers.cloudflare.com/bots/concepts/content-signals/
  *

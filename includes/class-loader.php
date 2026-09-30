@@ -8,9 +8,6 @@
 
 namespace Content_For_Agents;
 
-// TODO: Consider removing this abstraction once integrations no longer depend
-// on it, and register actions and filters directly with WordPress instead.
-
 /**
  * The loader class for managing WordPress hooks.
  *

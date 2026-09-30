@@ -49,7 +49,7 @@ class Discovery {
 	}
 
 	/**
-	 * Get the `/markdown` URL for a post.
+	 * Get the preferred Markdown URL for a post.
 	 *
 	 * @param \WP_Post $post Post object.
 	 * @return string|null Full markdown URL or null.

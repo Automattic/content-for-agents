@@ -26,13 +26,13 @@ class Testable_Markdown_Endpoint extends Markdown_Endpoint {
 	}
 
 	/**
-	 * Expose the shared post eligibility check.
+	 * Expose path eligibility.
 	 *
 	 * @param \WP_Post $post Post object.
 	 * @return bool
 	 */
-	public function can_serve_for_test( \WP_Post $post ): bool {
-		return $this->can_serve( $post );
+	public function can_serve_path_for_test( \WP_Post $post ): bool {
+		return $this->can_serve_path( $post );
 	}
 
 	/**

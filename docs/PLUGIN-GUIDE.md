@@ -4,40 +4,31 @@ This guide describes the public behavior and extension contracts of Content for
 Agents. For installation, see the [README](../README.md). For development
 setup and checks, see the [contributor guide](CONTRIBUTING.md).
 
-The plugin supports WordPress 7.0 or newer and PHP 8.2 or newer. When a VIP
-application loader includes it on an unsupported runtime, it leaves its hooks
-unregistered and shows an administrator notice.
-Markdown responses send `X-Content-Type-Options: nosniff` so
-browsers do not interpret agent-facing text as another content type.
-The published Markdown can contain editor-authored text and output from trusted
-integration callbacks. Consumers that render it as HTML must sanitize the
-rendered HTML for their own trust boundary.
+The plugin requires WordPress 7.0 or newer and PHP 8.2 or newer. On an
+unsupported runtime, it registers no hooks and shows an administrator notice.
+Markdown responses send `X-Content-Type-Options: nosniff`. Applications that
+render the Markdown as HTML must sanitize the result: posts and integration
+callbacks can supply content.
 
 ## Content and discovery
 
+### URLs and access
+
 For a published post at `/example/`, the canonical Markdown URL is
-`/example/markdown`, with an optional trailing slash. With WordPress's plain
-`?p=123` permalink structure, the canonical Markdown URL is
-`?p=123&markdown=true`. Discovery links use the appropriate form
-for the active permalink structure. The static front page does not receive an
-individual Markdown URL, leaving the root `/markdown` path available for a
-normal WordPress page. A `markdown=true` parameter on the static homepage is
-ignored, so WordPress continues with its normal HTML response. The page's former
-slug does not provide a hidden `/markdown` path. Private content requires
-permission to read it.
-Password-protected content requires the password or edit permission and is
-subject to the same read permission checks.
-Authenticated and password-authorized documents are not stored in the shared
-Markdown cache. The `markdown=true` query endpoint works on published singular
-URLs without authentication and is the advertised form under plain permalinks.
-Private and other non-public content is served only when WordPress resolves it
-as singular and the current user has permission to read it. The endpoint accepts
-WordPress preview URLs; WordPress resolves and nonce-validates the preview
-revision before the plugin serves it. WordPress may also resolve a normal
-authenticated `?p=ID` request for a readable draft. The plugin does not perform
-an independent ID fallback for unresolved drafts, pending posts, scheduled
-posts, or custom editorial statuses. Trash, auto-drafts, revisions, and other
-internal statuses are not served.
+`/example/markdown`, with an optional trailing slash. With plain permalinks,
+it is `?p=123&markdown=true`. Discovery links use the appropriate form. The
+static front page uses `/?markdown=true`; `/markdown` remains available as a
+normal page. Its old slug does not provide a hidden Markdown path.
+
+Unprotected published posts are public. For other statuses, WordPress must
+resolve a singular post and grant the visitor read permission.
+WordPress validates preview revisions and nonces before the plugin serves
+them; an authenticated `?p=ID` request may also resolve a readable draft.
+The plugin does not look up unresolved drafts, pending posts, scheduled posts,
+or custom statuses by ID. Trash, auto-drafts, revisions, and other internal
+statuses are never served. Password-protected content requires the password
+or edit permission as well as read permission. Authenticated and
+password-authorized responses do not enter the shared cache.
 
 Third-party paywall and access-control integrations must veto Markdown access
 when the current visitor is not entitled to read a post. They must also disable
@@ -68,43 +59,33 @@ add_filter(
 );
 ```
 
-These filters can only restrict the plugin's core access and cache decisions.
-They cannot expose drafts, private posts, previews, or password-protected posts
-that WordPress would otherwise deny. Access-control integrations are responsible
-for invalidating the Markdown document cache when their gating
-configuration changes.
+These filters can restrict access and caching, but cannot grant access that
+WordPress denies. Integrations must invalidate cached Markdown when their
+access rules change.
 
-Output includes YAML metadata, a single document title heading, and converted content. Published
-singular HTML pages advertise their alternate Markdown URL when supported. The
-plugin preserves modern, nested, and
-legacy quotes, citations, lists, tables, links, images, and code. Audio and video
-sources and lite YouTube embeds become Markdown links, with captions retained.
-Core embeds use WordPress's resolved preview when available and retain their
-original URL when the preview contains no readable content. Link destinations escape
-parentheses and backslashes, and encode whitespace and angle brackets for
-Markdown syntax. Links nested inside inline code retain their code styling and
-destinations.
-Figures, captions, and following text stay inside their containing list item.
-When WordPress upgrades legacy same-site HTTP URLs to HTTPS in HTML content,
-Markdown applies the same core URL replacement.
-Visual line breaks inside HTML headings become spaces so the whole heading
-remains one Markdown heading.
-When rendered content begins with the document title as an H1, that heading
-is used instead of adding a duplicate title.
-Text and descendants inside an element with `aria-hidden="true"` are excluded;
-`aria-hidden="false"` and content without the attribute remain visible.
-Unrecognized leaf blocks use HTML conversion; container blocks process children.
-HTML fallback applies the same WordPress typography and capitalization filters
-used for rendered content. Links without a destination become plain text, and
-emphasis and captions keep boundary spaces outside Markdown delimiters.
+### Conversion
+
+Output contains YAML metadata, one title heading, and converted content.
+Supported published HTML pages advertise their Markdown URL. The converter
+handles modern and legacy quotes, citations, lists, tables, links, images,
+and code. Audio, video, and lite YouTube embeds become links with captions.
+Core embeds use WordPress's resolved preview when available, or retain their
+URL when the preview has no readable content. Links escape characters that
+would break Markdown syntax. Links inside inline code keep their styling and
+destinations. Figures and captions stay inside their list item. The converter
+also follows WordPress's same-site HTTP-to-HTTPS replacement. Line breaks
+inside HTML headings become spaces; an existing title H1 is not duplicated.
+Content inside `aria-hidden="true"` is excluded; other content remains visible.
+Unrecognized leaf blocks use HTML conversion, while containers process their
+children. HTML fallback applies WordPress typography and capitalization
+filters. Links without a destination become plain text.
 WordPress 7.0 accordion headings become Markdown headings, their panels retain
 body text, and math block text is preserved.
 Classic Editor posts and freeform HTML mixed with blocks use the same HTML
 conversion path. The plugin does not require the Block Editor to be enabled.
-Buttons used as interface controls are omitted from Markdown. Buttons that
-label headings, such as accordion titles, retain their text. Visible status
-messages remain in the output, including widget loading messages when WordPress
-renders them in the article; code stays in a fenced block.
+Interface buttons are omitted, but buttons that label headings retain their
+text. Visible status messages remain, including loading messages rendered in
+the article. Preformatted code uses fenced blocks.
 Core post-title and post-excerpt blocks use the current post context. Direct
 `core/shortcode` blocks remain literal because conversion does not run
 `the_content`; other block render callbacks may still execute code.
@@ -118,11 +99,9 @@ content transformations and `content_for_agents_can_serve_markdown` for access
 control. See [Site integrations](INTEGRATIONS.md) for a canonical URL retirement
 example.
 
-Markdown responses include a `Content-Signal` header. Its
-`ai-train`, `search`, and `ai-input` values default to `yes` and can be
-configured with the `content_for_agents_content_signal` option or the
-`content_for_agents_content_signal_values` filter. The filter also controls
-the `robots.txt` directive.
+Markdown responses include a `Content-Signal` header, and `robots.txt` carries
+the same site-wide values. See [Metadata and Content-Signal contracts](#metadata-and-content-signal-contracts)
+for configuration.
 
 The plugin handles `/markdown` directly during `parse_request`. The
 `markdown=true` query endpoint runs during `template_redirect`, after
@@ -183,16 +162,24 @@ precedence over registry callbacks. Registry output then passes through
 `content_for_agents_block_{block-name}`. That filter does not run for the
 metadata path. Preserve this distinction when adding integrations.
 
-| Extension point                                                       | Contract                                                                                                                                |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `content_for_agents_pre_markdown`                                     | Return `null` to continue, or a string to supply the document body before block conversion. Receives the post.                          |
-| `content_for_agents_after_markdown`                                   | Filter the body when serving a document. Direct `post_to_markdown()` calls do not run this filter.                                      |
-| `content_for_agents_can_serve_markdown`                               | Veto Markdown response or discovery access. Receives the post and `response` or `discovery` context. Cannot override core protection.   |
-| `content_for_agents_can_cache_markdown`                               | Veto shared caching for visitor-specific Markdown responses. Receives the post. Cannot override core cache exclusions.                  |
-| `content_for_agents_authors`                                          | Return author entries containing `name` and optional `job_title` and `link`; receives the post.                                         |
-| `content_for_agents_frontmatter`                                      | Filter the metadata array; receives the post.                                                                                           |
-| `content_for_agents_content_signal_values`                            | Override the site-wide Content-Signal values for Markdown headers and `robots.txt`. Receives the stored values or defaults.             |
-| `content_for_agents_set_context` / `content_for_agents_clear_context` | Set or clear a conversion context. Read it with `Block_Markdown_Registry::get_context()`. Use `try/finally` to clear it after failures. |
+Public hooks:
+
+- `content_for_agents_pre_markdown` receives the post. Return `null` to continue
+  conversion, or a string to supply the body.
+- `content_for_agents_after_markdown` filters the body when serving a document.
+  Direct `post_to_markdown()` calls do not run it.
+- `content_for_agents_can_serve_markdown` receives the post and a `response` or
+  `discovery` context. Return `false` to deny access; it cannot grant access.
+- `content_for_agents_can_cache_markdown` receives the post. Return `false` to
+  keep visitor-specific output out of the shared cache.
+- `content_for_agents_authors` receives the post. Return author entries with a
+  `name` and optional `job_title` and `link`.
+- `content_for_agents_frontmatter` receives the post. Return the metadata array.
+- `content_for_agents_content_signal_values` receives stored values or defaults.
+  Return site-wide values for Markdown headers and `robots.txt`.
+- `content_for_agents_set_context` and `content_for_agents_clear_context` set
+  and clear a conversion context. Read it with
+  `Block_Markdown_Registry::get_context()` and clear it in `try/finally`.
 
 ### Common filter examples
 
@@ -224,8 +211,9 @@ add_filter(
 );
 ```
 
-Posts and pages are enabled automatically. Enable a custom post type after it is
-registered:
+The plugin enables WordPress `post` and `page` by default. Other post types,
+including custom post types and attachments, need the `content-for-agents`
+support flag. Add it after registering the type:
 
 ```php
 add_action(
@@ -249,15 +237,13 @@ When related data changes, integrations identify the affected article IDs and ca
 \Content_For_Agents\Markdown_Cache_Invalidator::invalidate_post( $article_id );
 ```
 
-The call clears the article and its parent, including the `/markdown`
-paths and query endpoint in supported page-cache purges. Moving a child also
-clears its former parent. Category/tag edits and author display-name changes
-clear affected documents, with the first 100 handled immediately and further
-batches scheduled through WordPress for VIP Cron Control.
-The 100-document limit bounds each callback's work. VIP queues and deduplicates
-URL purge requests; this does not synchronously purge the edge cache. Call
-before permanent deletion if a purge needs the old permalink. A callback that only generates different output does not itself
-invalidate a previously cached response.
+The call clears the article and its parent, and purges their Markdown paths
+and query endpoints. Moving a child also clears its former parent. Category,
+tag, and author display-name changes clear affected documents in batches of
+100; WordPress schedules later batches through VIP Cron Control. VIP queues
+and deduplicates URL purges, so edge-cache refresh is not immediate. Call
+before permanent deletion if the old permalink must be purged. A callback
+that changes output does not automatically invalidate cached content.
 
 ## Metadata and Content-Signal contracts
 

@@ -116,8 +116,7 @@ class Markdown_Cache_Invalidator {
 	/**
 	 * Maybe clear the cache on save if post type is enabled.
 	 *
-	 * Clears this post's cache and, when the post is a child (e.g. report chapter),
-	 * the parent's cache so the parent's TOC stays current.
+	 * Clears this post and its parent, whose output may include child data.
 	 *
 	 * @param int      $post_id Post ID.
 	 * @param \WP_Post $_post   Post object (unused; signature matches save_post).
@@ -137,13 +136,7 @@ class Markdown_Cache_Invalidator {
 			return;
 		}
 
-		self::clear_post_cache( $post_id );
-
-		// When a chapter is saved, the parent report's cached markdown (TOC with chapter titles) becomes stale.
-		$parent_id = wp_get_post_parent_id( $post_id );
-		if ( 0 !== $parent_id ) {
-			self::clear_post_cache( $parent_id );
-		}
+		self::invalidate_post( (int) $post_id );
 	}
 
 	/** Clear the former parent's navigation when a supported child moves. */
@@ -255,8 +248,7 @@ class Markdown_Cache_Invalidator {
 	/**
 	 * Clear cache for a post (delete/trash).
 	 *
-	 * Also clears the parent's cache when the post is a child (e.g. report chapter)
-	 * so the parent's TOC is invalidated.
+	 * Also clears the parent's cache when the post is a child.
 	 *
 	 * @param int $post_id Post ID.
 	 */

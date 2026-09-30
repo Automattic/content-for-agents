@@ -61,7 +61,6 @@ class Markdown_Response {
 			$markdown_body = $converter->post_to_markdown( $post );
 			$yaml          = $frontmatter->build( $post, $markdown_body );
 
-			/** This filter is documented in class-markdown-response.php */
 			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
 
 			$content = $yaml . self::get_title_heading( $title, $markdown_body ) . $markdown_body;

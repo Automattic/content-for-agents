@@ -22,15 +22,12 @@ The public behavior and supported extension contracts are documented in the
 - npm 10 or newer
 - Docker, OrbStack, or another Docker-compatible runtime for `wp-env`
 
-The local `wp-env` configuration runs WordPress 7.0 with PHP 8.2, matching the
-minimum supported runtime. CI runs PHP checks and unit tests with PHP 8.2
-through 8.5. It runs the integration suite on those PHP versions against the
-WordPress 7.0 and 7.1 branches and master.
+The local `wp-env` configuration uses the minimum supported versions:
+WordPress 7.0 and PHP 8.2. CI checks PHP 8.2 through 8.5 and runs integration
+tests against the WordPress 7.0 and 7.1 branches and master.
 
-For branch protection, require the stable `PHP / Result` and
-`Integration / Result` checks. These results pass only when every job in their
-respective matrices succeeds. In the Actions run view, each matrix and its
-result appear beneath the PHP or Integration caller.
+For branch protection, require `PHP / Result` and `Integration / Result`.
+Each passes only when its full matrix succeeds.
 
 Composer and npm dependencies are development-only. The deployed plugin has
 no JavaScript runtime and does not load Composer's autoloader.
@@ -44,14 +41,11 @@ npm ci
 npx wp-env start
 ```
 
-The development site is available at <http://localhost:8910> by default. If
-those ports are already in use, run `npx wp-env start --auto-port` and use the
-URL it prints. Sign in at
-`/wp-admin/` with the default `wp-env` credentials, username `admin` and
-password `password`. The WordPress test environment uses port `8911` by default.
-
-Run `npx wp-env stop` when the environments are no longer needed. Installed dependencies, test results, browser artifacts, and ZIP files are
-ignored and must not be committed.
+The development site uses <http://localhost:8910> and the test site uses port
+`8911` by default. If those ports are busy, run `npx wp-env start --auto-port`
+and use the printed URLs. Sign in at `/wp-admin/` with the default `wp-env`
+credentials (`admin` / `password`). Run `npx wp-env stop` when finished.
+Dependencies, test output, browser artifacts, and ZIP files are ignored by Git.
 
 ## Architecture and request lifecycle
 
@@ -75,7 +69,7 @@ The main responsibilities are divided as follows:
 | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Plugin initialization and hooks | `Bootstrap`, `Loader`                                                                                    |
 | Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                                                 |
-| Block and HTML conversion       | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`, `Html_To_Markdown_Converter` |
+| Block and HTML conversion       | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`, `HTML_To_Markdown_Converter` |
 | Document metadata               | `Frontmatter`                                                                                            |
 | Discovery                       | `Discovery`, `Robots_Txt`                                                                                |
 | Cache invalidation              | `Markdown_Cache_Invalidator`                                                                             |
@@ -85,14 +79,11 @@ Integration plugins use their own namespaces and autoloaders. Preserve the
 extension contracts in the plugin guide when changing hooks, identifiers,
 callback precedence, options, metadata, or cache behavior.
 
-The `/markdown` endpoint is handled directly during `parse_request` using
-WordPress's normalized request path. Do not replace this with stored rewrite rules or an activation hook. VIP
-application-loaded plugins are not guaranteed to run activation hooks when
-deployed. Individual documents use `/markdown` with pretty permalinks and the
-`markdown=true` query endpoint with plain permalinks. The query
-endpoint runs during `template_redirect` and supports anonymous published
-content plus non-public content that WordPress has resolved as a permitted
-singular request. It does not perform direct post-ID fallback.
+The `/markdown` endpoint uses WordPress's normalized path during
+`parse_request`. It does not use stored rewrite rules or activation hooks;
+VIP application loaders may not run activation hooks. The `markdown=true`
+endpoint runs during `template_redirect`, after WordPress resolves the post.
+It does not look up unresolved post IDs.
 
 ## Choose the right test layer
 
