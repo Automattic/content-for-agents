@@ -91,6 +91,7 @@ It does not look up unresolved post IDs.
 | --------------------- | ------------------------------------------------------------------------------ | ------------------------------------ |
 | PHP unit              | Isolated behavior that does not require WordPress                              | `composer test:unit`                 |
 | WordPress integration | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`           |
+| Markdown structure    | How a Markdown parser interprets the exact-output fixtures                     | `npm run test:markdown-structure`    |
 | Manual UI             | Public Markdown output in a real browser                                       | Exercise public URLs in a browser    |
 | VIP deployment        | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application |
 
@@ -113,6 +114,7 @@ composer check-platform-reqs
 composer phpcs
 composer test:unit
 npm run format:check
+npm run test:markdown-structure
 npx wp-env start
 npm run test:integration
 git diff --check
@@ -121,6 +123,8 @@ git diff --check
 Use `composer phpcs-fix` to apply PHP style fixes and `npm run format` to format
 Markdown, JSON, and YAML files. The exact-output conversion fixtures are kept in
 their original form so the tests can compare them with generated Markdown.
+`npm run test:renderer-targets` runs the separate, currently failing list-nesting
+target. It is excluded from CI until the renderer rewrite satisfies it.
 
 ## Common change recipes
 
