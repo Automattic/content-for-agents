@@ -3,26 +3,11 @@
 /**
  * HTML-to-Markdown converter.
  *
- * This converter is derived from the one developed in the WordPress/ai
- * Markdown Feeds experiment (PR #194):
+ * Derived from WordPress/ai's Markdown Feeds experiment, PR #194, at commit
+ * 3504700a6cec86dce5280683a58baf405cef3099. Uses the WordPress HTML API
+ * for parsing and Markdown_Output_Writer for output formatting.
  *
  * @see https://github.com/WordPress/ai/pull/194
- *
- * Upstream source:
- * includes/Experiments/Markdown_Feeds/HTML_To_Markdown_Converter.php
- * at commit 3504700a6cec86dce5280683a58baf405cef3099
- *
- * PR #194 closed without merging. Retain this tested derivative for now.
- * dmsnell/html-to-md is a candidate replacement, but currently has no tagged
- * release and documents escaping, table and image/link limitations. Evaluate
- * it against the supported content before changing conversion behavior.
- *
- * @see https://github.com/dmsnell/html-to-md
- *
- * This converter focuses on producing a readable Markdown representation of
- * typical WordPress post content without external parsing dependencies. It
- * traverses WordPress's HTML API tokens and delegates Markdown formatting to
- * Markdown_Output_Writer.
  *
  * @package Content_For_Agents
  */

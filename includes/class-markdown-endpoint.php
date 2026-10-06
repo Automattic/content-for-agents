@@ -41,7 +41,7 @@ class Markdown_Endpoint {
 		}
 
 		$post = $this->get_post_from_path( $post_path );
-		if ( ! $post instanceof \WP_Post || ! $this->can_serve( $post ) ) {
+		if ( ! $post instanceof \WP_Post || ! $this->can_serve_path( $post ) ) {
 			return;
 		}
 
@@ -143,7 +143,8 @@ class Markdown_Endpoint {
 
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
-			|| ( 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === $post->ID )
+			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| self::is_static_front_page( $post )
 		) {
 			return '';
 		}
@@ -167,7 +168,6 @@ class Markdown_Endpoint {
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
 			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
-			|| self::is_static_front_page( $post )
 		) {
 			return '';
 		}
@@ -195,15 +195,26 @@ class Markdown_Endpoint {
 	}
 
 	/**
+	 * Determine whether a path may serve Markdown for a post.
+	 *
+	 * The static front page has no dedicated path. Its former slug may still
+	 * resolve to the page, so keep path requests from serving it there.
+	 *
+	 * @param \WP_Post $post Post object.
+	 * @return bool Whether the path may serve Markdown.
+	 */
+	protected function can_serve_path( \WP_Post $post ): bool {
+		return ! self::is_static_front_page( $post ) && $this->can_serve( $post );
+	}
+
+	/**
 	 * Determine whether Markdown may be served for a post.
 	 *
 	 * @param \WP_Post $post Post object.
 	 * @return bool Whether the post may be served.
 	 */
 	protected function can_serve( \WP_Post $post ): bool {
-		if ( ! post_type_supports( $post->post_type, 'content-for-agents' )
-			|| self::is_static_front_page( $post )
-		) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
 			return false;
 		}
 

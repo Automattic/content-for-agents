@@ -11,9 +11,9 @@ namespace Content_For_Agents;
 /**
  * Converts WordPress post content to Markdown.
  *
- * Walks the parsed block tree for each post. Blocks with a registered
- * callback in Block_Markdown_Registry produce their own markdown; all
- * other blocks fall back to render_block() → HTML_To_Markdown_Converter.
+ * Walks the parsed block tree. Metadata and registered callbacks can supply
+ * Markdown; other blocks render to HTML for conversion. Wrappers with custom
+ * descendants retain their content order.
  *
  * @package Content_For_Agents
  */

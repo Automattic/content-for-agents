@@ -38,9 +38,7 @@ class Bootstrap {
 		$this->loader->add_action( 'init', $this, 'fire_block_markdown_registration', 5 );
 		add_filter( 'block_type_metadata', array( $this, 'inject_block_markdown_metadata' ), 10, 1 );
 
-		// Allow the content transformer (and others) to signal which provider
-		// is driving the current markdown conversion so block callbacks can
-		// branch their output (e.g. charts → PNG image in email context).
+		// Expose the current conversion context to registered block callbacks.
 		add_action( 'content_for_agents_set_context', array( Block_Markdown_Registry::class, 'set_context' ) );
 		add_action( 'content_for_agents_clear_context', array( Block_Markdown_Registry::class, 'clear_context' ) );
 
@@ -74,7 +72,6 @@ class Bootstrap {
 		 * Use Block_Markdown_Registry::register() inside this action to map a
 		 * block name to a callable that returns markdown.
 		 *
-		 * @since 1.0.0
 		 */
 		do_action( 'content_for_agents_register_block_callbacks' );
 	}

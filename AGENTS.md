@@ -2,7 +2,7 @@
 
 ## Project purpose
 
-Content for Agents is a WordPress VIP plugin that publishes supported content through `{permalink}/markdown`, falls back to a `markdown=true` query endpoint for plain permalinks. The query endpoint also supports permission-checked non-public content. The plugin is the provider-neutral base derived from PRC Markdown for Agents. PRC compatibility, provider adapters, and VIP integration-framework packaging are separate work.
+Content for Agents is a WordPress VIP plugin that publishes posts and pages as Markdown. Pretty permalinks use `{permalink}/markdown`; plain permalinks use `?markdown=true`. WordPress permissions govern non-public content. The base plugin is provider-neutral; PRC compatibility, provider adapters, and VIP integration packaging belong in separate plugins.
 
 The supported runtime is WordPress 7.0 or newer, PHP 8.2 or newer, and the WordPress VIP platform runtime. Node.js is required for the local WordPress integration environment and release packaging.
 
@@ -51,7 +51,7 @@ git diff --check
 - Do not add legacy PRC aliases, provider-specific logic, or integration-framework packaging unless the task explicitly covers that work.
 - The plugin requires VIP URL lookup, cache purge, and Cron Control APIs. Do not add silent non-VIP fallbacks that alter production behavior.
 - Do not rely on activation hooks or stored rewrite rules. VIP application loaders may include the plugin during `plugins_loaded`.
-- Use `/markdown` as the canonical, discoverable individual document retrieval form with pretty permalinks and `markdown=true` as the canonical fallback with plain permalinks. The query endpoint otherwise requires permission to read non-public posts.
+- Use `/markdown` for individual documents with pretty permalinks and `markdown=true` with plain permalinks or a static front page. WordPress must resolve non-public posts and grant read permission.
 - Preserve access controls for private, draft, preview, and password-protected content. Never cache authenticated, preview, or password-authorized Markdown in a shared cache.
 - Cache invalidation changes must consider current and former `/markdown` and `markdown=true` URLs, plus parents, taxonomy changes, and author display-name changes.
 - Update `README.md` when the project overview, installation, or supported versions change; update `docs/PLUGIN-GUIDE.md` when behavior or extension contracts change.
