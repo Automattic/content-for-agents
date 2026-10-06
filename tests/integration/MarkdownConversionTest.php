@@ -18,13 +18,31 @@ use Content_For_Agents\Markdown_Response;
  */
 class MarkdownConversionTest extends \WP_UnitTestCase {
 	/**
-	 * An article that renders its own title should have one H1 in Markdown.
+	 * A visible H1 takes precedence over the title stored in frontmatter.
 	 */
 	public function test_response_does_not_repeat_rendered_title_heading(): void {
 		$method = new \ReflectionMethod( Markdown_Response::class, 'get_title_heading' );
 
 		$this->assertSame( '', $method->invoke( null, 'Contact WordPress VIP', "# Contact WordPress VIP\n\nBody" ) );
-		$this->assertSame( "# Document title\n\n", $method->invoke( null, 'Document title', "# Different heading\n\nBody" ) );
+		$this->assertSame( '', $method->invoke( null, 'Document title', "# Different heading\n\nBody" ) );
+		$this->assertSame( '', $method->invoke( null, 'How <em>The New Yorker</em> works', "# How *The New Yorker* works\n\nBody" ) );
+		$this->assertSame( "# Document title\n\n", $method->invoke( null, 'Document title', "## Section heading\n\nBody" ) );
+		$this->assertSame( '', $method->invoke( null, 'Product Terms', "Intro paragraph.\n\n# Product Terms\n\nBody" ) );
+		$this->assertSame( '', $method->invoke( null, 'Stored title', "Intro paragraph.\n\n# Visible heading\n\nBody" ) );
+		$this->assertSame( "# Stored title\n\n", $method->invoke( null, 'Stored title', "```text\n# Code comment\n```\n\nBody" ) );
+	}
+
+	/**
+	 * Frontmatter stores a readable title when the WordPress title contains HTML.
+	 */
+	public function test_frontmatter_title_strips_html(): void {
+		$post_id = self::factory()->post->create( array( 'post_title' => 'How <em>The New Yorker</em> works' ) );
+		$yaml    = ( new \Content_For_Agents\Frontmatter() )->build( $post_id );
+		$this->assertStringContainsString( '"title": "How The New Yorker works"', $yaml );
+
+		$post_id = self::factory()->post->create( array( 'post_title' => 'How &lt;em&gt;literal&lt;/em&gt; works' ) );
+		$yaml    = ( new \Content_For_Agents\Frontmatter() )->build( $post_id );
+		$this->assertStringContainsString( '"title": "How <em>literal</em> works"', $yaml );
 	}
 
 	/**
@@ -422,6 +440,24 @@ HTML;
 	}
 
 	/**
+	 * Wrapper-owned HTML follows the same shortcode conversion as other content.
+	 */
+	public function test_shortcodes_in_wrapper_owned_content(): void {
+		add_shortcode( 'owned_link', static fn(): string => '<a href="https://example.com/owned">Owned link</a>' );
+		$content = <<<'HTML'
+<!-- wp:group -->
+<div class="wp-block-group">Before [owned_link] and [missing_link url="https://example.com/missing"]<!-- wp:content-for-agents/test-block {"text":"Callback"} /-->After.</div>
+<!-- /wp:group -->
+HTML;
+
+		try {
+			$this->assertSame( "Before [Owned link](https://example.com/owned) and [https://example.com/missing](https://example.com/missing)\n\n**Callback**\n\nAfter.", $this->convert_post_content( $content ) );
+		} finally {
+			remove_shortcode( 'owned_link' );
+		}
+	}
+
+	/**
 	 * Quotes with custom descendants retain the dedicated citation behavior.
 	 */
 	public function test_quote_with_callback_uses_child_and_citation_path_once(): void {
@@ -464,6 +500,48 @@ HTML;
 			"> **Quoted child**\n>\n> *Editorial* [source](https://example.com/source)",
 			$this->convert_post_content( $content )
 		);
+	}
+
+	/**
+	 * Nested bold tags in a citation render as one bold span.
+	 */
+	public function test_nested_bold_citation_has_one_markdown_span(): void {
+		$html = '<blockquote><p>Quote</p><cite><strong><strong>D</strong>an Stubbs<br></strong>VP Analytics</cite></blockquote>';
+		$this->assertSame(
+			"> Quote\n>\n> — **Dan Stubbs**\n> VP Analytics",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * A bold quote stays bold across a linked phrase.
+	 */
+	public function test_nested_bold_quote_with_link_has_one_span(): void {
+		$html = '<blockquote><p><b><strong>“When we chose </strong><a href="https://example.com/"><strong>total engaged minutes</strong></a><strong>, we had made a decision.” </strong></b></p></blockquote>';
+		$this->assertSame(
+			"> **“When we chose [total engaged minutes](https://example.com/), we had made a decision.”**\n>",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * Authored Markdown punctuation in HTML text stays literal.
+	 */
+	public function test_literal_markdown_punctuation_is_escaped(): void {
+		$html = '<p>A `thank you` page with *stars*, [brackets], and &lt;tags&gt;.</p>';
+		$this->assertSame(
+			'A \\`thank you\\` page with \\*stars\\*, \\[brackets\\], and \\<tags\\>.',
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+		$this->assertSame( '\\_\\_\\_', ( new HTML_To_Markdown_Converter() )->convert( '<p>___</p>' ) );
+		$this->assertSame( "Code\n\\# comment\n\\---", ( new HTML_To_Markdown_Converter() )->convert( '<p>Code<br># comment<br>---</p>' ) );
+		$this->assertSame( '#### Manufacturers of Consent: 1990s \#', ( new HTML_To_Markdown_Converter() )->convert( '<h4>Manufacturers of Consent: 1990s #</h4>' ) );
+		$this->assertSame(
+			'\[\<a href=”//example.com”\>Story\</a\>\]',
+			( new HTML_To_Markdown_Converter() )->convert( '<p>[&lt;a href=&#8221;//example.com&#8221;&gt;Story&lt;/a&gt;]</p>' )
+		);
+		$this->assertSame( '### It is not \*just\* pageviews.', ( new HTML_To_Markdown_Converter() )->convert( '<h3>It is not *just* pageviews.</h3>' ) );
+		$this->assertSame( "> \\> curl example\n>", ( new HTML_To_Markdown_Converter() )->convert( '<blockquote><p>&gt; curl example</p></blockquote>' ) );
 	}
 
 	/**
@@ -569,6 +647,17 @@ HTML;
 MARKDOWN
 			,
 			$markdown
+		);
+	}
+
+	/**
+	 * A table with TD cells in its first row still needs a Markdown separator.
+	 */
+	public function test_table_without_th_cells_is_valid_markdown(): void {
+		$html = '<table><tr><td><strong>Parameter</strong></td><td>Description</td></tr><tr><td>__hsfp</td><td>HubSpot tracking parameter</td></tr></table>';
+		$this->assertSame(
+			"| **Parameter** | Description |\n| --- | --- |\n| \\_\\_hsfp | HubSpot tracking parameter |",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 	}
 
@@ -692,6 +781,45 @@ HTML;
 	}
 
 	/**
+	 * Embeds inside layout blocks still use their resolved previews.
+	 */
+	public function test_nested_core_embeds_use_resolved_previews(): void {
+		$first    = 'https://example.com/resource/one/';
+		$second   = 'https://example.com/resource/two/';
+		$callback = static function ( $result, $requested_url ) use ( $first, $second ) {
+			if ( $first === $requested_url ) {
+				return '<blockquote><a href="' . esc_url( $first ) . '">Resource One</a></blockquote>';
+			}
+			if ( $second === $requested_url ) {
+				return '<blockquote><a href="' . esc_url( $second ) . '">Resource Two</a></blockquote>';
+			}
+			return $result;
+		};
+		add_filter( 'pre_oembed_result', $callback, 10, 2 );
+		try {
+			$content = '<!-- wp:columns --><div class="wp-block-columns">'
+				. '<!-- wp:column --><div class="wp-block-column">'
+				. '<!-- wp:embed {"url":"' . $first . '","type":"rich"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $first . '</div></figure>'
+				. '<!-- /wp:embed -->'
+				. '</div><!-- /wp:column -->'
+				. '<!-- wp:column --><div class="wp-block-column">'
+				. '<!-- wp:embed {"url":"' . $second . '","type":"rich"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $second . '</div></figure>'
+				. '<!-- /wp:embed -->'
+				. '</div><!-- /wp:column -->'
+				. '</div><!-- /wp:columns -->';
+			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
+			$this->assertSame(
+				"> [Resource One]($first)\n\n> [Resource Two]($second)",
+				( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post )
+			);
+		} finally {
+			remove_filter( 'pre_oembed_result', $callback, 10 );
+		}
+	}
+
+	/**
 	 * An iframe-only preview still retains the original media URL.
 	 */
 	public function test_core_embed_without_visible_preview_keeps_url(): void {
@@ -703,6 +831,26 @@ HTML;
 		try {
 			$content = '<!-- wp:embed {"url":"' . $url . '","type":"video"} -->'
 				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $url . '</div></figure>'
+				. '<!-- /wp:embed -->';
+			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
+			$this->assertSame( $url, ( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post ) );
+		} finally {
+			remove_filter( 'pre_oembed_result', $callback, 10 );
+		}
+	}
+
+	/**
+	 * A URL-only embed remains plain text when its HTML has no link.
+	 */
+	public function test_core_embed_url_only_preview_stays_plain(): void {
+		$url      = 'https://dash.example.com/to/posts/?minutes=today&fs=1';
+		$callback = static function ( $result, $requested_url ) use ( $url ) {
+			return $url === $requested_url ? $url : $result;
+		};
+		add_filter( 'pre_oembed_result', $callback, 10, 2 );
+		try {
+			$content = '<!-- wp:embed {"url":"' . $url . '"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . esc_html( $url ) . '</div></figure>'
 				. '<!-- /wp:embed -->';
 			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
 			$this->assertSame( $url, ( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post ) );
@@ -731,6 +879,26 @@ HTML;
 				"> A useful quote [source](https://example.com/source)\n>\n> — Example",
 				( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post )
 			);
+		} finally {
+			remove_filter( 'pre_oembed_result', $callback, 10 );
+		}
+	}
+
+	/**
+	 * Resolved previews use WordPress typography like rendered article HTML.
+	 */
+	public function test_core_embed_uses_rendered_typography(): void {
+		$url      = 'https://twitter.com/example/status/123456790';
+		$callback = static function ( $result, $requested_url ) use ( $url ) {
+			return $url === $requested_url ? '<blockquote><p>April 1 - May 30</p></blockquote>' : $result;
+		};
+		add_filter( 'pre_oembed_result', $callback, 10, 2 );
+		try {
+			$content = '<!-- wp:embed {"url":"' . $url . '","type":"rich"} -->'
+				. '<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">' . $url . '</div></figure>'
+				. '<!-- /wp:embed -->';
+			$post    = self::factory()->post->create_and_get( array( 'post_status' => 'draft' ) );
+			$this->assertSame( "> April 1 – May 30\n>", ( new Markdown_Converter() )->blocks_to_markdown( parse_blocks( $content ), $post ) );
 		} finally {
 			remove_filter( 'pre_oembed_result', $callback, 10 );
 		}
@@ -769,16 +937,24 @@ HTML;
 			'Use [`option="true"`](https://example.com/option) and `prefix`[`value`](https://example.com/value)`suffix`.',
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
+		$this->assertSame(
+			'[`option`](https://example.com/option)',
+			( new HTML_To_Markdown_Converter() )->convert( '<code><a href=" https://example.com/option ">option</a></code>' )
+		);
 	}
 
 	/**
-	 * Adjacent links stay separate through comments and non-rendering wrappers.
+	 * Adjacent links preserve their visible spacing through non-rendering wrappers.
 	 */
-	public function test_adjacent_links_have_a_separator(): void {
+	public function test_adjacent_links_preserve_visible_spacing(): void {
 		$html = '<a href="https://example.com/a">First</a><!-- marker --><span><a href="https://example.com/b">Second</a></span><a href="https://example.com/c">Third</a>';
 		$this->assertSame(
-			'[First](https://example.com/a) [Second](https://example.com/b) [Third](https://example.com/c)',
+			'[First](https://example.com/a)[Second](https://example.com/b)[Third](https://example.com/c)',
 			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+		$this->assertSame(
+			'[Buzzfeed](https://example.com/story)[.](https://example.com/source)',
+			( new HTML_To_Markdown_Converter() )->convert( '<a href="https://example.com/story">Buzzfeed</a><a href="https://example.com/source">.</a>' )
 		);
 	}
 
@@ -792,6 +968,7 @@ HTML;
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 		$this->assertSame( '[Zero](0)', ( new HTML_To_Markdown_Converter() )->convert( '<a href="0">Zero</a>' ) );
+		$this->assertSame( '[Example](https://example.com/path)', ( new HTML_To_Markdown_Converter() )->convert( '<a href=" https://example.com/path ">Example</a>' ) );
 	}
 
 	/**
@@ -802,6 +979,24 @@ HTML;
 		$this->assertSame( '**Label:** Text', $converter->convert( '<p><strong>Label: </strong>Text</p>' ) );
 		$this->assertSame( 'Before **label** after', $converter->convert( '<p>Before<strong> label</strong> after</p>' ) );
 		$this->assertSame( 'Before *label* after', $converter->convert( '<p>Before<em> label </em>after</p>' ) );
+	}
+
+	/**
+	 * Emphasis beginning with punctuation after a word needs HTML tags.
+	 */
+	public function test_emphasis_after_word_begins_with_punctuation(): void {
+		$this->assertSame(
+			'Meanwhile<strong>, Related Top-Performing Posts</strong> lists results.',
+			( new HTML_To_Markdown_Converter() )->convert( '<p>Meanwhile<strong>, Related Top-Performing Posts</strong> lists results.</p>' )
+		);
+		$this->assertSame(
+			'embeddings<em>.</em>',
+			( new HTML_To_Markdown_Converter() )->convert( '<p>embeddings<em>.</em></p>' )
+		);
+		$this->assertSame(
+			'_The National<em>‘s latest issue</em>_',
+			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption>The National<em>‘s latest issue</em></figcaption></figure>' )
+		);
 	}
 
 	/**
@@ -829,6 +1024,14 @@ HTML;
 	public function test_nested_ordered_list_uses_parent_marker_width(): void {
 		$html = '<ol start="7"><li>Section<ol><li>Nested</li><li>Second</li></ol></li><li>Next</li></ol>';
 		$this->assertSame( "7. Section\n\n   1. Nested\n   2. Second\n\n8. Next", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Line breaks within a list item cannot end the Markdown list.
+	 */
+	public function test_line_breaks_keep_list_item_continuation(): void {
+		$html = '<ol><li>Definitions<br><br>Analytics report<br><br>More terms</li><li>Licenses</li></ol>';
+		$this->assertSame( "1. Definitions\n\n   Analytics report\n\n   More terms\n2. Licenses", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
 	}
 
 	/**
@@ -999,10 +1202,9 @@ HTML;
 	}
 
 	/**
-	 * Context-dependent core blocks resolve against the post being converted,
-	 * without executing shortcodes as the_content would.
+	 * Context-dependent core blocks and a Shortcode block use the current post.
 	 */
-	public function test_dynamic_post_blocks_convert_without_executing_shortcodes(): void {
+	public function test_dynamic_post_blocks_and_registered_shortcode(): void {
 		$executions = 0;
 		add_shortcode(
 			'block_gauntlet_shortcode',
@@ -1026,8 +1228,123 @@ HTML;
 			remove_shortcode( 'block_gauntlet_shortcode' );
 		}
 
-		$this->assertSame( "## SENTINEL-POST-TITLE\n\nSENTINEL-POST-EXCERPT text.\n\n[block_gauntlet_shortcode]", $markdown );
+		$this->assertSame( "## SENTINEL-POST-TITLE\n\nSENTINEL-POST-EXCERPT text.\n\n**SENTINEL-SHORTCODE** output.", $markdown );
+		$this->assertSame( 1, $executions );
+	}
+
+	/**
+	 * Unregistered shortcodes expose a URL when available and otherwise stay literal.
+	 */
+	public function test_unregistered_shortcode_fallback(): void {
+		$markdown = $this->convert_post_content( '<!-- wp:shortcode -->[missing_player url="https://example.com/track"]<!-- /wp:shortcode --><!-- wp:shortcode -->[missing_player id="42"]<!-- /wp:shortcode --><!-- wp:paragraph --><p>[missing_player https://example.com/video]</p><!-- /wp:paragraph -->' );
+		$this->assertSame( "[https://example.com/track](https://example.com/track)\n\n[missing_player id=\"42\"]\n\n[https://example.com/video](https://example.com/video)", $markdown );
+	}
+
+	/**
+	 * Registered shortcodes inside ordinary blocks run after block callbacks.
+	 */
+	public function test_registered_shortcode_inside_paragraph(): void {
+		$executions = 0;
+		add_shortcode(
+			'paragraph_player',
+			static function () use ( &$executions ): string {
+				++$executions;
+				return '<iframe src="https://example.com/embed/paragraph"></iframe>';
+			}
+		);
+		try {
+			$markdown = $this->convert_post_content( '<!-- wp:paragraph --><p>[paragraph_player]</p><!-- /wp:paragraph -->' );
+		} finally {
+			remove_shortcode( 'paragraph_player' );
+		}
+		$this->assertSame( '[Embedded media](https://example.com/embed/paragraph)', $markdown );
+		$this->assertSame( 1, $executions );
+	}
+
+	/**
+	 * Rendered blocks use WordPress's smiley presentation.
+	 */
+	public function test_rendered_paragraph_converts_smilies(): void {
+		$this->assertSame(
+			'Accuracy rating: 🙂',
+			$this->convert_post_content( '<!-- wp:paragraph --><p>Accuracy rating: :)</p><!-- /wp:paragraph -->' )
+		);
+	}
+
+	/**
+	 * A registered shortcode's player URL remains available in Markdown.
+	 */
+	public function test_registered_shortcode_iframe_keeps_media_url(): void {
+		$executions = 0;
+		add_shortcode(
+			'test_player',
+			static function () use ( &$executions ): string {
+				++$executions;
+				return '<iframe src="https://media.example.com/embed/123"></iframe><p>Episode title</p>';
+			}
+		);
+		try {
+			$markdown = $this->convert_post_content( '<!-- wp:shortcode -->[test_player /]<!-- /wp:shortcode -->' );
+		} finally {
+			remove_shortcode( 'test_player' );
+		}
+		$this->assertSame( "[Embedded media](https://media.example.com/embed/123)\n\nEpisode title", $markdown );
+		$this->assertSame( 1, $executions );
+	}
+
+	/**
+	 * A block-level Markdown callback owns its block before shortcode handling.
+	 */
+	public function test_block_callback_precedes_shortcode_in_rendered_block(): void {
+		$executions = 0;
+		add_shortcode(
+			'priority_player',
+			static function () use ( &$executions ): string {
+				++$executions;
+				return '<p>Shortcode output</p>';
+			}
+		);
+		register_block_type(
+			'content-for-agents/shortcode-priority',
+			array( 'render_callback' => static fn(): string => '[priority_player]' )
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/shortcode-priority',
+			static fn(): string => 'Block callback output'
+		);
+		try {
+			$markdown = $this->convert_post_content( '<!-- wp:content-for-agents/shortcode-priority /-->' );
+		} finally {
+			unregister_block_type( 'content-for-agents/shortcode-priority' );
+			remove_shortcode( 'priority_player' );
+		}
+		$this->assertSame( 'Block callback output', $markdown );
 		$this->assertSame( 0, $executions );
+	}
+
+	/**
+	 * An iframe in authored HTML retains a usable source link.
+	 */
+	public function test_iframe_keeps_source_link(): void {
+		$this->assertSame(
+			'[Embedded media](https://media.example.com/embed/123)',
+			( new HTML_To_Markdown_Converter() )->convert( '<iframe src="https://media.example.com/embed/123"></iframe>' )
+		);
+	}
+
+	/**
+	 * Built-in media shortcodes follow the visible audio and video output.
+	 */
+	public function test_core_media_shortcodes_become_links(): void {
+		$video    = '[video mp4="https://example.com/demo.mp4"][/video]';
+		$audio    = '[audio mp3="https://example.com/demo.mp3"][/audio]';
+		$markdown = $this->convert_post_content( '<!-- wp:shortcode -->' . $video . '<!-- /wp:shortcode --><p>' . $audio . '</p>' );
+		$this->assertStringContainsString( '[Video](https://example.com/demo.mp4?_=1)', $markdown );
+		$this->assertStringContainsString( '[Audio](https://example.com/demo.mp3?_=1)', $markdown );
+		$this->assertSame( 1, substr_count( $markdown, 'demo.mp4' ) );
+		$this->assertSame( 1, substr_count( $markdown, 'demo.mp3' ) );
+		$this->assertStringNotContainsString( '[video ', $markdown );
+		$this->assertStringNotContainsString( '[audio ', $markdown );
 	}
 
 	/**
