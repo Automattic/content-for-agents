@@ -72,7 +72,7 @@ Nested media-text paragraph.
 
 SENTINEL-COVER nested content.
 
-[SENTINEL-FILE guide](https://example.com/guide\(v2\).pdf) [Download guide](https://example.com/guide\(v2\).pdf)
+[SENTINEL-FILE guide](https://example.com/guide\(v2\).pdf)[Download guide](https://example.com/guide\(v2\).pdf)
 
 [Audio](https://example.com/audio.mp3)
 _SENTINEL-AUDIO recording_

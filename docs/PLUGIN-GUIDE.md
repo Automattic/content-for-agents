@@ -65,30 +65,43 @@ access rules change.
 
 ### Conversion
 
-Output contains YAML metadata, one title heading, and converted content.
+Output contains YAML metadata and converted content. The plugin adds a title
+heading only when the body has no H1; the stored title remains in frontmatter.
 Supported published HTML pages advertise their Markdown URL. The converter
 handles modern and legacy quotes, citations, lists, tables, links, images,
-and code. Audio, video, and lite YouTube embeds become links with captions.
+and code. Audio, video, iframe sources, and lite YouTube embeds become links
+with captions.
 Core embeds use WordPress's resolved preview when available, or retain their
 URL when the preview has no readable content. Links escape characters that
 would break Markdown syntax. Links inside inline code keep their styling and
 destinations. Figures and captions stay inside their list item. The converter
 also follows WordPress's same-site HTTP-to-HTTPS replacement. Line breaks
-inside HTML headings become spaces; an existing title H1 is not duplicated.
+inside HTML headings become spaces. A visible H1 takes precedence over the
+stored title, even when it follows introductory text.
 Content inside `aria-hidden="true"` is excluded; other content remains visible.
 Unrecognized leaf blocks use HTML conversion, while containers process their
-children. HTML fallback applies WordPress typography and capitalization
-filters. Links without a destination become plain text.
+children. HTML fallback applies WordPress typography, capitalization, and
+smiley filters. Links without a destination become plain text.
 WordPress 7.0 accordion headings become Markdown headings, their panels retain
 body text, and math block text is preserved.
 Classic Editor posts and freeform HTML mixed with blocks use the same HTML
-conversion path. The plugin does not require the Block Editor to be enabled.
+conversion path. Freeform content has no block name, so block metadata and
+block-level callbacks do not run for it. The plugin does not require the Block
+Editor to be enabled.
 Interface buttons are omitted, but buttons that label headings retain their
 text. Visible status messages remain, including loading messages rendered in
 the article. Preformatted code uses fenced blocks.
-Core post-title and post-excerpt blocks use the current post context. Direct
-`core/shortcode` blocks remain literal because conversion does not run
-`the_content`; other block render callbacks may still execute code.
+
+Core post-title and post-excerpt blocks use the current post context.
+Registered shortcodes in Shortcode blocks, ordinary rendered blocks, and
+Classic Editor content run their callbacks, as they do in HTML. Wrapper-owned
+HTML around child blocks follows the same path. Rendered shortcode
+output is converted to Markdown; iframe players retain a link to the embedded
+media. An unregistered shortcode with a `url` attribute or positional URL
+becomes a link to that URL. One without a URL remains literal. Block metadata
+and registered block-level Markdown callbacks take precedence. Conversion does
+not run `the_content` over the entire post; other block render callbacks may
+still execute code.
 
 Conversion intentionally reads the stored `post_content` and walks its parsed
 block tree instead of applying WordPress's `the_content` filter. This preserves
@@ -135,8 +148,13 @@ add_action( 'content_for_agents_register_block_callbacks', static function () {
 } );
 ```
 
-Callbacks receive the parsed block and its post and return Markdown. An empty
-string suppresses the block. Registry methods `register()`, `get()`, and `has()`
+`content_for_agents_register_block_callbacks` is an action for registering
+callbacks, not a filter that converts blocks. During conversion, `get()` returns
+the registered callback for a block name, or `null` when none exists. A missing
+callback lets the plugin use its built-in handling or rendered-HTML fallback.
+Callbacks receive the parsed block and its post and return Markdown. Their
+result is authoritative: an empty string suppresses the block, and `null` is
+not a fallthrough signal. Registry methods `register()`, `get()`, and `has()`
 are public. A later registration for the same block name replaces the earlier
 one.
 
@@ -158,7 +176,9 @@ A block can alternatively declare metadata in `block.json`:
 
 The callable must be loaded before conversion. Metadata modes `strip` and
 `children-only` take precedence over metadata callbacks; metadata handling takes
-precedence over registry callbacks. Registry output then passes through
+precedence over registry callbacks. A metadata callback's empty or `null`
+result also suppresses the block. An absent or non-callable metadata callback
+lets conversion continue. Registry output then passes through
 `content_for_agents_block_{block-name}`. That filter does not run for the
 metadata path. Preserve this distinction when adding integrations.
 

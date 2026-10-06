@@ -166,6 +166,14 @@ class Markdown_Converter {
 				continue;
 			}
 
+			if ( 'core/shortcode' === $block_name ) {
+				$shortcode = trim( $block['innerHTML'] ?? '' );
+				if ( '' !== $shortcode ) {
+					$parts[] = $this->convert_rendered_html( $shortcode, $converter, true );
+				}
+				continue;
+			}
+
 			// Default: render block to HTML, then convert to markdown.
 			$html = render_block( $block );
 			$md   = $this->convert_rendered_html( $html, $converter );
@@ -173,10 +181,11 @@ class Markdown_Converter {
 				global $wp_embed;
 				$embed_url = $block['attrs']['url'] ?? '';
 				if ( $wp_embed instanceof \WP_Embed && is_string( $embed_url ) && '' !== $embed_url ) {
-					$resolved_md   = $converter->convert( $wp_embed->shortcode( array(), $embed_url ) );
+					$resolved_md   = $this->convert_rendered_html( $wp_embed->shortcode( array(), $embed_url ), $converter );
 					$resolved_text = trim( $resolved_md );
 					if (
 						'' !== $resolved_text
+						&& ! preg_match( '/^\[Embedded media\]\([^\n]+\)$/', $resolved_text )
 						&& ! in_array( $resolved_text, array( $embed_url, '[' . $embed_url . '](' . $embed_url . ')' ), true )
 					) {
 						$md = $resolved_md;
@@ -195,14 +204,50 @@ class Markdown_Converter {
 	}
 
 	/**
-	 * Apply WordPress text formatting to block HTML as the content filter does.
+	 * Apply WordPress text and shortcode filters before HTML conversion.
 	 *
-	 * @param string                     $html      Rendered block HTML.
+	 * @param string                     $html      Rendered or authored HTML.
 	 * @param HTML_To_Markdown_Converter $converter HTML converter.
+	 * @param bool                       $literal_if_unresolved Preserve a lone unresolved Shortcode block.
 	 * @return string Markdown output.
 	 */
-	private function convert_rendered_html( string $html, HTML_To_Markdown_Converter $converter ): string {
-		return $converter->convert( capital_P_dangit( wptexturize( $html ) ) );
+	private function convert_rendered_html( string $html, HTML_To_Markdown_Converter $converter, bool $literal_if_unresolved = false ): string {
+		$linked   = $this->link_unregistered_shortcodes( $html );
+		$prepared = capital_P_dangit( wptexturize( $linked ) );
+		$rendered = convert_smilies( do_shortcode( $prepared ) );
+		if ( $literal_if_unresolved && $linked === $html && $rendered === $prepared ) {
+			return $html;
+		}
+		return $converter->convert( $rendered );
+	}
+
+	/**
+	 * Link URL-bearing unregistered shortcodes before typography changes their attributes.
+	 *
+	 * @param string $content HTML or shortcode text.
+	 * @return string Resolved HTML.
+	 */
+	private function link_unregistered_shortcodes( string $content ): string {
+		if ( ! str_contains( $content, '[' ) || ! preg_match_all( '/\[(?!\[|\/)([A-Za-z][A-Za-z0-9_-]*)\b/', $content, $found ) ) {
+			return $content;
+		}
+		$unregistered = array_values( array_filter( array_unique( $found[1] ), static fn( string $name ): bool => ! shortcode_exists( $name ) ) );
+		if ( empty( $unregistered ) ) {
+			return $content;
+		}
+		return (string) preg_replace_callback(
+			'/' . get_shortcode_regex( $unregistered ) . '/s',
+			static function ( array $matches ): string {
+				if ( '[' === $matches[1] && ']' === $matches[6] ) {
+					return $matches[0];
+				}
+				$attributes = shortcode_parse_atts( $matches[3] );
+				$url        = is_array( $attributes ) ? ( $attributes['url'] ?? $attributes[0] ?? '' ) : '';
+				$url        = is_string( $url ) ? esc_url( $url ) : '';
+				return '' === $url ? $matches[0] : '<a href="' . $url . '">' . esc_html( html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 ) ) . '</a>';
+			},
+			$content
+		);
 	}
 
 	/**
@@ -236,6 +281,9 @@ class Markdown_Converter {
 	 * @return bool Whether callback-aware traversal is needed.
 	 */
 	private function has_custom_markdown_strategy( string $block_name ): bool {
+		if ( 'core/embed' === $block_name ) {
+			return true;
+		}
 		if ( Block_Markdown_Registry::has( $block_name ) ) {
 			return true;
 		}

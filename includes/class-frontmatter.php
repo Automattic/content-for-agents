@@ -53,7 +53,7 @@ class Frontmatter {
 	 * @return string
 	 */
 	protected function get_title( $post ) {
-		return html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		return html_entity_decode( wp_strip_all_tags( get_the_title( $post ) ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 	}
 
 	/**

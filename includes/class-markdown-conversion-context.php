@@ -39,6 +39,6 @@ final class Markdown_Conversion_Context {
 	/** @var array<int, array<string, mixed>> */
 	public array $media_stack = array();
 
-	/** @var array<int, array{marker: string, emitted: bool, start: int|null}> */
+	/** @var array<int, array{marker: string, emitted: bool, start: int|null, redundant: bool, html: bool}> */
 	public array $emphasis_stack = array();
 }

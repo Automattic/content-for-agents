@@ -88,8 +88,7 @@ class Markdown_Response {
 	}
 
 	/**
-	 * Add a document title only when the rendered body does not already begin
-	 * with that heading.
+	 * Add a document title only when the rendered body has no H1.
 	 *
 	 * @param string $title         Normalized document title.
 	 * @param string $markdown_body Rendered post content.
@@ -99,15 +98,38 @@ class Markdown_Response {
 		if ( '' === $title ) {
 			return '';
 		}
-
-		if ( preg_match( '/\A# ([^\n]+)(?:\n|$)/u', $markdown_body, $matches ) ) {
-			$heading = trim( preg_replace( '/\s+/u', ' ', $matches[1] ) ?? $matches[1] );
-			if ( $title === $heading ) {
-				return '';
-			}
+		if ( self::has_body_h1( $markdown_body ) ) {
+			return '';
 		}
 
-		return "# $title\n\n";
+		$markdown_title = ( new HTML_To_Markdown_Converter() )->convert( $title );
+		return "# $markdown_title\n\n";
+	}
+
+	/**
+	 * Find a document heading without treating fenced code as a heading.
+	 *
+	 * @param string $markdown_body Rendered post content.
+	 * @return bool Whether the body has an H1.
+	 */
+	private static function has_body_h1( string $markdown_body ): bool {
+		$fence = '';
+		foreach ( preg_split( '/\r\n|\r|\n/', $markdown_body ) as $line ) {
+			if ( '' !== $fence ) {
+				if ( preg_match( '/^ {0,3}' . preg_quote( $fence, '/' ) . preg_quote( $fence[0], '/' ) . '*[ \t]*$/', $line ) ) {
+					$fence = '';
+				}
+				continue;
+			}
+			if ( preg_match( '/^ {0,3}(`{3,}|~{3,})/', $line, $matches ) ) {
+				$fence = $matches[1];
+				continue;
+			}
+			if ( preg_match( '/^ {0,3}#(?:[ \t]+|$)/', $line ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
