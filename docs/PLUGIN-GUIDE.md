@@ -97,11 +97,11 @@ Registered shortcodes in Shortcode blocks, ordinary rendered blocks, and
 Classic Editor content run their callbacks, as they do in HTML. Wrapper-owned
 HTML around child blocks follows the same path. Rendered shortcode
 output is converted to Markdown; iframe players retain a link to the embedded
-media. An unregistered shortcode with a `url` attribute or positional URL
-becomes a link to that URL. One without a URL remains literal. Block metadata
-and registered block-level Markdown callbacks take precedence. Conversion does
-not run `the_content` over the entire post; other block render callbacks may
-still execute code.
+media. An unregistered shortcode with a recognizable `url` attribute or
+positional URL becomes a link. Bracketed prose and shortcodes without a URL
+remain literal. Block metadata and registered block-level Markdown callbacks
+take precedence. Conversion does not run `the_content` over the entire post;
+other block render callbacks may still execute code.
 
 Conversion intentionally reads the stored `post_content` and walks its parsed
 block tree instead of applying WordPress's `the_content` filter. This preserves

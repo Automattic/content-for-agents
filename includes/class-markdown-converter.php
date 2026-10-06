@@ -243,7 +243,9 @@ class Markdown_Converter {
 				}
 				$attributes = shortcode_parse_atts( $matches[3] );
 				$url        = is_array( $attributes ) ? ( $attributes['url'] ?? $attributes[0] ?? '' ) : '';
-				$url        = is_string( $url ) ? esc_url( $url ) : '';
+				$url        = is_string( $url ) ? trim( $url ) : '';
+				// esc_url() treats a plain word as a hostname, so require URL syntax first.
+				$url = preg_match( '~^(?:[a-z][a-z0-9+.-]*:|/|\?|#|www\.)~i', $url ) ? esc_url( $url ) : '';
 				return '' === $url ? $matches[0] : '<a href="' . $url . '">' . esc_html( html_entity_decode( $url, ENT_QUOTES | ENT_HTML5 ) ) . '</a>';
 			},
 			$content

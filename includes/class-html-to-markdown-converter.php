@@ -641,7 +641,10 @@ final class HTML_To_Markdown_Converter {
 					return;
 				}
 			}
-			$merge = $marker === $context->last_closed_emphasis_marker
+			// Do not merge an earlier span into a link before its label opens.
+			$link  = $context->link_stack[ array_key_last( $context->link_stack ) ] ?? null;
+			$merge = ( null === $link || '' === $link['href'] || $link['open'] )
+				&& $marker === $context->last_closed_emphasis_marker
 				&& strlen( $context->output ) === $context->last_closed_emphasis_end
 				&& str_ends_with( $context->output, $marker );
 			if ( $merge ) {
@@ -702,10 +705,8 @@ final class HTML_To_Markdown_Converter {
 				continue;
 			}
 			$emphasis['start'] = strlen( $context->output );
-			// Markdown delimiters cannot open between a word and punctuation.
-			$emphasis['html'] = '' !== $next_text
-				&& preg_match( '/[\p{L}\p{N}]$/u', $context->output )
-				&& preg_match( '/^[\p{P}]/u', $next_text );
+			// Markdown delimiters can render literally before punctuation.
+			$emphasis['html'] = '' !== $next_text && preg_match( '/^[\p{P}]/u', $next_text );
 			$opening          = $emphasis['html'] ? ( '**' === $emphasis['marker'] ? '<strong>' : '<em>' ) : $emphasis['marker'];
 			$this->writer->append_text( $context->output, $opening, $context->at_line_start, $context->blockquote_depth, true );
 			$emphasis['emitted'] = true;
