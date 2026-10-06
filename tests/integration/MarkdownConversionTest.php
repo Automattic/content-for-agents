@@ -512,7 +512,7 @@ HTML;
 	public function test_nested_bold_quote_with_link_has_one_span(): void {
 		$html = '<blockquote><p><b><strong>“When we chose </strong><a href="https://example.com/"><strong>total engaged minutes</strong></a><strong>, we had made a decision.” </strong></b></p></blockquote>';
 		$this->assertSame(
-			"> **“When we chose [total engaged minutes](https://example.com/), we had made a decision.”**\n>",
+			"> <strong>“When we chose [total engaged minutes](https://example.com/), we had made a decision.”</strong>\n>",
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 	}
@@ -975,9 +975,13 @@ HTML;
 	}
 
 	/**
-	 * Emphasis beginning with punctuation after a word needs HTML tags.
+	 * Emphasis beginning with punctuation needs HTML tags.
 	 */
-	public function test_emphasis_after_word_begins_with_punctuation(): void {
+	public function test_emphasis_beginning_with_punctuation(): void {
+		$this->assertSame(
+			'<strong>“</strong>This post follows.',
+			( new HTML_To_Markdown_Converter() )->convert( '<p><b>“</b>This post follows.</p>' )
+		);
 		$this->assertSame(
 			'Meanwhile<strong>, Related Top-Performing Posts</strong> lists results.',
 			( new HTML_To_Markdown_Converter() )->convert( '<p>Meanwhile<strong>, Related Top-Performing Posts</strong> lists results.</p>' )
@@ -990,6 +994,14 @@ HTML;
 			'_The National<em>‘s latest issue</em>_',
 			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption>The National<em>‘s latest issue</em></figcaption></figure>' )
 		);
+		$this->assertSame(
+			'_*Caption (*[*Photo*](https://example.com/photo)<em>)</em>_',
+			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption><em>Caption (</em><a href="https://example.com/photo"><em>Photo</em></a><em>)</em></figcaption></figure>' )
+		);
+		$this->assertSame(
+			'*Caption test(*',
+			( new HTML_To_Markdown_Converter() )->convert( '<p><em>Caption <span>test</span>(</em></p>' )
+		);
 	}
 
 	/**
@@ -1000,6 +1012,8 @@ HTML;
 		$this->assertSame( '**AB**', $converter->convert( '<strong>A</strong><strong>B</strong>' ) );
 		$this->assertSame( '**A** **B**', $converter->convert( '<strong>A </strong><strong>B</strong>' ) );
 		$this->assertSame( '*A* *B*', $converter->convert( '<em>A </em><em>B</em>' ) );
+		$this->assertSame( '*AB*', $converter->convert( '<em>A</em><a href="/x"></a><em>B</em>' ) );
+		$this->assertSame( '[*AB*](/x)', $converter->convert( '<a href="/x"><em>A</em><em>B</em></a>' ) );
 		$this->assertSame( 'Before[**link**](/x)after', $converter->convert( '<p>Before<strong><a href="/x">link</a></strong>after</p>' ) );
 	}
 
@@ -1231,6 +1245,14 @@ HTML;
 	public function test_unregistered_shortcode_fallback(): void {
 		$markdown = $this->convert_post_content( '<!-- wp:shortcode -->[missing_player url="https://example.com/track"]<!-- /wp:shortcode --><!-- wp:shortcode -->[missing_player id="42"]<!-- /wp:shortcode --><!-- wp:paragraph --><p>[missing_player https://example.com/video]</p><!-- /wp:paragraph -->' );
 		$this->assertSame( "[https://example.com/track](https://example.com/track)\n\n[missing_player id=\"42\"]\n\n[https://example.com/video](https://example.com/video)", $markdown );
+		$this->assertSame(
+			'They reacted \[from the impact of AI Overviews\].',
+			$this->convert_post_content( '<!-- wp:paragraph --><p>They reacted [from the impact of AI Overviews].</p><!-- /wp:paragraph -->' )
+		);
+		$this->assertSame(
+			'[/demo](/demo)',
+			$this->convert_post_content( '<!-- wp:shortcode -->[missing_player url="/demo"]<!-- /wp:shortcode -->' )
+		);
 	}
 
 	/**
