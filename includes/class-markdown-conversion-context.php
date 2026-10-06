@@ -16,7 +16,17 @@ final class Markdown_Conversion_Context {
 	public int $blockquote_depth = 0;
 	public bool $in_pre          = false;
 	public ?string $pre_code     = null;
+	public ?string $pre_language = null;
 	public ?string $inline_code  = null;
+
+	/** @var array<int, array<string, mixed>> Output snapshots for open text containers. */
+	public array $block_starts = array();
+
+	/** @var array<int, array{rollback_offset:int, rollback_suffix:string, content_offset:int, at_line_start:bool}> */
+	public array $quote_starts = array();
+
+	/** @var array<int, array<string, mixed>> State before inline HTML opens. */
+	public array $inline_html_starts = array();
 
 	/** @var array<int, array{string, string|null}> */
 	public array $inline_code_parts = array();

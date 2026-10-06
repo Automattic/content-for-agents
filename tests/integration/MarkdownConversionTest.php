@@ -156,7 +156,7 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	public function test_paragraphs_escape_literal_list_markers(): void {
 		$this->assertSame(
 			"1\\. **First tip**\n\n\\+\n\nNext paragraph",
-			( new HTML_To_Markdown_Converter() )->convert( '<p>1. <strong>First tip</strong></p><p><sub>+</sub></p><p>Next paragraph</p>' )
+			( new HTML_To_Markdown_Converter() )->convert( '<p>1. <strong>First tip</strong></p><p>+</p><p>Next paragraph</p>' )
 		);
 	}
 
@@ -962,6 +962,8 @@ HTML;
 		);
 		$this->assertSame( '[Zero](0)', ( new HTML_To_Markdown_Converter() )->convert( '<a href="0">Zero</a>' ) );
 		$this->assertSame( '[Example](https://example.com/path)', ( new HTML_To_Markdown_Converter() )->convert( '<a href=" https://example.com/path ">Example</a>' ) );
+		$this->assertSame( 'Empty URL', ( new HTML_To_Markdown_Converter() )->convert( '<a href>Empty URL</a>' ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<img src alt="No source">' ) );
 	}
 
 	/**
@@ -1078,6 +1080,102 @@ HTML;
 	public function test_non_code_whitespace_is_normalized(): void {
 		$html = '<p>Hello </p><p>World</p><p>A<br><br><br>B</p>';
 		$this->assertSame( "Hello\n\nWorld\n\nA\n\nB", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/**
+	 * Empty wrappers do not create Markdown blocks or disrupt inline formatting.
+	 */
+	public function test_empty_wrappers_and_inline_content_keep_their_boundaries(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame(
+			"One\n\nTwo",
+			$converter->convert( '<section><div></div><div><p>One</p><aside></aside><p>Two</p></div></section>' )
+		);
+		$this->assertSame(
+			"> A **bold** [link](https://example.com/).\n>",
+			$converter->convert( '<blockquote><div></div><p>A <strong>bold</strong> <a href="https://example.com/">link</a>.</p></blockquote>' )
+		);
+		$this->assertSame(
+			'[**AB**](https://example.com/)',
+			$converter->convert( '<a href="https://example.com/"><strong>A<!-- separator -->B</strong></a>' )
+		);
+	}
+
+	/**
+	 * Suppressed containers must leave surrounding list and quote markers intact.
+	 */
+	public function test_empty_containers_preserve_surrounding_markdown(): void {
+		$cases     = array(
+			'empty quote'          => array( 'Before<blockquote></blockquote>After', 'BeforeAfter' ),
+			'empty list'           => array( 'Before<ul></ul>After', 'BeforeAfter' ),
+			'quote inside list'    => array( '<ul><li><blockquote></blockquote>Text</li></ul>', '- Text' ),
+			'list inside list'     => array( '<ul><li><ul></ul>Text</li></ul>', '- Text' ),
+			'quote inside ordered' => array( '<ol><li><blockquote></blockquote>Text</li></ol>', '1. Text' ),
+			'quote inside quote'   => array( '<blockquote><blockquote></blockquote>Text</blockquote>', '> Text' ),
+			'list inside quote'    => array( '<blockquote><ul></ul>Text</blockquote>', '> Text' ),
+		);
+		$converter = new HTML_To_Markdown_Converter();
+		foreach ( $cases as $name => $case ) {
+			$this->assertSame( $case[1], $converter->convert( $case[0] ), $name );
+		}
+	}
+
+	/**
+	 * The HTML hidden attribute excludes content from rendered Markdown.
+	 */
+	public function test_hidden_html_attribute_omits_content(): void {
+		$html = '<p hidden>Secret</p><div hidden="false"><strong>Also secret</strong></div><p>Visible</p>';
+		$this->assertSame( 'Visible', ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<p hidden="until-found">Findable</p>' ) );
+	}
+
+	/**
+	 * Semantic block containers separate visible content without empty blocks.
+	 */
+	public function test_semantic_html_containers_keep_content_boundaries(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( "Before\n\nContent\n\nAfter", $converter->convert( 'Before<section>Content</section>After' ) );
+		$this->assertSame( "One\n\nTwo", $converter->convert( '<section>One</section><section></section><article>Two</article>' ) );
+	}
+
+	/** Inline strikethrough and explicit code languages survive conversion. */
+	public function test_strikethrough_and_code_language(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( 'Keep ~~old~~ new', $converter->convert( '<p>Keep <s>old</s> new</p>' ) );
+		$this->assertSame( '~~obsolete~~', $converter->convert( '<p><del>obsolete</del></p>' ) );
+		$this->assertSame( '\\~\\~literal\\~\\~', $converter->convert( '<p>~~literal~~</p>' ) );
+		$this->assertSame( '<del>\\~\\~literal\\~\\~</del>', $converter->convert( '<p><del>~~literal~~</del></p>' ) );
+		$this->assertSame( "```php\necho 1;\n```", $converter->convert( '<pre><code class="language-php">echo 1;</code></pre>' ) );
+		$this->assertSame( "```\necho 1;\n```", $converter->convert( '<pre class="wp-block-code"><code>echo 1;</code></pre>' ) );
+	}
+
+	/** Inline HTML retains effects without a portable Markdown equivalent. */
+	public function test_quote_subscript_and_superscript_keep_their_effects(): void {
+		$html = '<p>She said <q>hello</q>. H<sub>2</sub>O and x<sup>2</sup>.</p>';
+		$this->assertSame( 'She said <q>hello</q>. H<sub>2</sub>O and x<sup>2</sup>.', ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame( '[<sup>2</sup>](/x)', ( new HTML_To_Markdown_Converter() )->convert( '<a href="/x"><sup>2</sup></a>' ) );
+		$this->assertSame( '**<sup>2</sup>**', ( new HTML_To_Markdown_Converter() )->convert( '<strong><sup>2</sup></strong>' ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<p><sub></sub></p>' ) );
+		$this->assertSame( 'BeforeAfter', ( new HTML_To_Markdown_Converter() )->convert( 'Before<blockquote><sup></sup></blockquote>After' ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<p><strong><sup></sup></strong></p>' ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<p><em><sub></sub></em></p>' ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<p><a href="/x"><sup></sup></a></p>' ) );
+		$this->assertSame( '', ( new HTML_To_Markdown_Converter() )->convert( '<p><q></q></p>' ) );
+		$this->assertSame( '**After**', ( new HTML_To_Markdown_Converter() )->convert( '<p><strong><sup></sup>After</strong></p>' ) );
+		$this->assertSame( '[After](/x)', ( new HTML_To_Markdown_Converter() )->convert( '<p><a href="/x"><sup></sup>After</a></p>' ) );
+		$this->assertSame( '**<sup>2</sup>**', ( new HTML_To_Markdown_Converter() )->convert( '<p><strong><sup></sup><sup>2</sup></strong></p>' ) );
+	}
+
+	/** Form controls and embedded UI markup do not become article prose. */
+	public function test_control_markup_is_omitted_without_losing_labels(): void {
+		$html = '<p>Request <label>Region<select><option>North</option></select></label> access.<textarea>Draft answer</textarea><svg><title>Icon</title><text>Arrow</text></svg></p>';
+		$this->assertSame( 'Request Region access.', ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/** Image title attributes remain available in Markdown, including inline images. */
+	public function test_image_title_is_preserved(): void {
+		$html = '<p>Photo <img src="/x.jpg" alt="Cat" title="A &quot;portrait&quot;"></p>';
+		$this->assertSame( 'Photo ![Cat](/x.jpg "A \\"portrait\\"")', ( new HTML_To_Markdown_Converter() )->convert( $html ) );
 	}
 
 	/**
@@ -1538,6 +1636,11 @@ MARKDOWN
 			'SENTINEL-LIST-CALLBACK',
 			'SENTINEL-TEXT-COLUMNS',
 			'SENTINEL-FREEFORM',
+			'SENTINEL-RICH-LIST-INTRO',
+			'SENTINEL-RICH-LIST-FOLLOWUP',
+			'SENTINEL-RICH-LIST-NESTED',
+			'SENTINEL-RICH-LIST-END',
+			'SENTINEL-RICH-LIST-SIBLING',
 			'SENTINEL-SOCIAL',
 			'SENTINEL-CUSTOM-QUOTE',
 			'SENTINEL-CUSTOM-SUMMARY',

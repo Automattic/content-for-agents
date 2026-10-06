@@ -69,16 +69,18 @@ Output contains YAML metadata and converted content. The plugin adds a title
 heading only when the body has no H1; the stored title remains in frontmatter.
 Supported published HTML pages advertise their Markdown URL. The converter
 handles modern and legacy quotes, citations, lists, tables, links, images,
-and code. Audio, video, iframe sources, and lite YouTube embeds become links
+strikethrough, and code. Explicit `language-*` classes label fenced code.
+Audio, video, iframe sources, and lite YouTube embeds become links
 with captions.
-Core embeds use WordPress's resolved preview when available, or retain their
+Image titles are retained when present. Core embeds use WordPress's resolved preview when available, or retain their
 URL when the preview has no readable content. Links escape characters that
 would break Markdown syntax. Links inside inline code keep their styling and
 destinations. Figures and captions stay inside their list item. The converter
 also follows WordPress's same-site HTTP-to-HTTPS replacement. Line breaks
 inside HTML headings become spaces. A visible H1 takes precedence over the
 stored title, even when it follows introductory text.
-Content inside `aria-hidden="true"` is excluded; other content remains visible.
+Content marked `hidden` or `aria-hidden="true"` is excluded. Form controls and
+other interface markup are omitted while their surrounding labels remain.
 Unrecognized leaf blocks use HTML conversion, while containers process their
 children. HTML fallback applies WordPress typography, capitalization, and
 smiley filters. Links without a destination become plain text.
