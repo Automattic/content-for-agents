@@ -7,9 +7,7 @@
     "includes/",
     "content-for-agents.php",
     "LICENSE",
-    "docs/NOTICE.md",
-    "docs/PLUGIN-GUIDE.md",
-    "docs/INTEGRATIONS.md",
+    "docs/",
     "README.md"
   ],
   "scripts": {

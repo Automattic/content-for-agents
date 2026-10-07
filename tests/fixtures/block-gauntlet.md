@@ -2,7 +2,7 @@
 
 SENTINEL-INLINE has **bold and *nested emphasis with `inline code`***, plus an [example link](https://example.com/docs).
 
-First line
+First line\
 Second line
 
 ---
@@ -93,6 +93,16 @@ SENTINEL-TEXT-COLUMNS first.
 Second legacy column.
 
 SENTINEL-FREEFORM classic block with *formatting*.
+
+- SENTINEL-RICH-LIST-INTRO first paragraph.
+
+  SENTINEL-RICH-LIST-FOLLOWUP second paragraph.
+
+  - SENTINEL-RICH-LIST-NESTED child.
+
+  SENTINEL-RICH-LIST-END after nested list.
+
+- SENTINEL-RICH-LIST-SIBLING next.
 
 - [SENTINEL-SOCIAL WordPress](https://example.com/profile)
 

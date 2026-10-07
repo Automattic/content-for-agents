@@ -54,5 +54,7 @@ If you are working from a source checkout, follow the development setup in the
 ## Documentation
 
 - [Plugin behavior and extension contracts](docs/PLUGIN-GUIDE.md)
+- [Conversion architecture](docs/ARCHITECTURE.md)
+- [Site integrations](docs/INTEGRATIONS.md)
 - [Development and contributing](docs/CONTRIBUTING.md)
 - [Attribution](docs/NOTICE.md)

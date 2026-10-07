@@ -30,6 +30,11 @@ statuses are never served. Password-protected content requires the password
 or edit permission as well as read permission. Authenticated and
 password-authorized responses do not enter the shared cache.
 
+Markdown paths use VIP's cached URL lookup first. If it misses a nested page,
+WordPress's page-path lookup is used only when that page's permalink exactly
+matches the requested path. The access check still applies. Local development
+uses WordPress core URL lookup when VIP's API is unavailable.
+
 Third-party paywall and access-control integrations must veto Markdown access
 when the current visitor is not entitled to read a post. They must also disable
 shared caching whenever entitlement depends on visitor-specific state such as a
@@ -65,32 +70,34 @@ access rules change.
 
 ### Conversion
 
-Output contains YAML metadata and converted content. The plugin adds a title
+See the [conversion architecture](ARCHITECTURE.md) for the order of block
+callbacks, HTML fallback, and response assembly.
+
+Output contains YAML frontmatter and converted content. The plugin adds a title
 heading only when the body has no H1; the stored title remains in frontmatter.
-Supported published HTML pages advertise their Markdown URL. The converter
-handles modern and legacy quotes, citations, lists, tables, links, images,
-and code. Audio, video, iframe sources, and lite YouTube embeds become links
-with captions.
-Core embeds use WordPress's resolved preview when available, or retain their
-URL when the preview has no readable content. Links escape characters that
-would break Markdown syntax. Links inside inline code keep their styling and
-destinations. Figures and captions stay inside their list item. The converter
-also follows WordPress's same-site HTTP-to-HTTPS replacement. Line breaks
-inside HTML headings become spaces. A visible H1 takes precedence over the
-stored title, even when it follows introductory text.
-Content inside `aria-hidden="true"` is excluded; other content remains visible.
-Unrecognized leaf blocks use HTML conversion, while containers process their
-children. HTML fallback applies WordPress typography, capitalization, and
-smiley filters. Links without a destination become plain text.
-WordPress 7.0 accordion headings become Markdown headings, their panels retain
-body text, and math block text is preserved.
+Supported published HTML pages advertise their Markdown URL.
+
+The converter handles quotes, citations, lists, tables, links, images,
+strikethrough, and code. Explicit `language-*` classes label fenced code.
+Audio, video, iframe sources, and lite YouTube embeds become links. Core embeds
+use a readable WordPress preview when available; otherwise their URL remains.
+Figures and captions stay inside their list item. Table captions become text
+beside the table. WordPress 7.0 accordion headings, math text, and visible
+status messages are retained. Interface controls are omitted, except buttons
+that label headings.
+
+HTML conversion targets CommonMark with GFM tables and strikethrough. Links
+escape Markdown syntax; links inside inline code keep their styling and URLs.
+`<br>` becomes a hard break where possible and remains HTML in headings, table
+cells, and at formatting or block ends. Inline code containing `<br>` uses HTML
+`<code>`. Preformatted code uses fenced blocks. Content marked `hidden` or
+`aria-hidden="true"` is excluded. Links without a destination become plain
+text. The converter also applies WordPress's same-site HTTP-to-HTTPS replacement.
+
 Classic Editor posts and freeform HTML mixed with blocks use the same HTML
 conversion path. Freeform content has no block name, so block metadata and
 block-level callbacks do not run for it. The plugin does not require the Block
 Editor to be enabled.
-Interface buttons are omitted, but buttons that label headings retain their
-text. Visible status messages remain, including loading messages rendered in
-the article. Preformatted code uses fenced blocks.
 
 Core post-title and post-excerpt blocks use the current post context.
 Registered shortcodes in Shortcode blocks, ordinary rendered blocks, and
@@ -111,22 +118,6 @@ HTML presentation filters with Markdown authorization. Integrations should use
 content transformations and `content_for_agents_can_serve_markdown` for access
 control. See [Site integrations](INTEGRATIONS.md) for a canonical URL retirement
 example.
-
-Markdown responses include a `Content-Signal` header, and `robots.txt` carries
-the same site-wide values. See [Metadata and Content-Signal contracts](#metadata-and-content-signal-contracts)
-for configuration.
-
-The plugin handles `/markdown` directly during `parse_request`. The
-`markdown=true` query endpoint runs during `template_redirect`, after
-WordPress has resolved the post and any preview revision. This avoids
-activation-time rewrite-rule flushes, which are not reliable for VIP
-application-loaded plugins. Markdown paths use VIP's cached URL lookup first.
-If it misses a nested page, WordPress's page-path lookup is used only when
-that page's permalink exactly matches the requested path. The existing access
-check still applies. Local development uses WordPress core URL lookup when
-VIP's API is unavailable. The `robots_txt` filter adds Content-Signal guidance
-where the platform permits it; VIP test-domain crawler restrictions still
-apply. Actual edge-cache refresh requires deployment verification.
 
 ## Extend the base
 
@@ -266,6 +257,9 @@ before permanent deletion if the old permalink must be purged. A callback
 that changes output does not automatically invalidate cached content.
 
 ## Metadata and Content-Signal contracts
+
+Markdown responses include a `Content-Signal` header. The `robots_txt` filter
+adds the same site-wide values to `robots.txt` where the platform permits it.
 
 Frontmatter accepts nested PHP arrays (maps or lists), strings, finite numbers,
 booleans, and null, with a maximum nesting depth of 32. Empty arrays render as
