@@ -395,10 +395,12 @@ final class Markdown_Inline_Buffer {
 				continue;
 			}
 			$is_effect = in_array( $event['type'], array( 'strong', 'em', 'del', 'caption' ), true );
+			// A caption already applies emphasis, so an inner <em> adds no new effect.
+			$effect = 'caption' === $event['type'] ? 'em' : $event['type'];
 			if ( $event['opening'] ) {
 				if ( $is_effect ) {
-					$depth                           = $effect_depths[ $event['type'] ] ?? 0;
-					$effect_depths[ $event['type'] ] = $depth + 1;
+					$depth                    = $effect_depths[ $effect ] ?? 0;
+					$effect_depths[ $effect ] = $depth + 1;
 					if ( 0 !== $depth ) {
 						continue;
 					}
@@ -410,8 +412,8 @@ final class Markdown_Inline_Buffer {
 				);
 			} else {
 				if ( $is_effect ) {
-					$depth                           = ( $effect_depths[ $event['type'] ] ?? 1 ) - 1;
-					$effect_depths[ $event['type'] ] = $depth;
+					$depth                    = ( $effect_depths[ $effect ] ?? 1 ) - 1;
+					$effect_depths[ $effect ] = $depth;
 					if ( 0 !== $depth ) {
 						continue;
 					}

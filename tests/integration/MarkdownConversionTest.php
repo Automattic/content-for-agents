@@ -145,8 +145,16 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	 */
 	public function test_caption_with_emphasis_and_space_keeps_its_text(): void {
 		$this->assertSame(
-			'_*Caption*_',
+			'_Caption_',
 			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption><em>Caption </em></figcaption></figure>' )
+		);
+		$this->assertSame(
+			'_Caption_',
+			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption><i>Caption</i></figcaption></figure>' )
+		);
+		$this->assertSame(
+			'_Part italic rest_',
+			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption>Part <i>italic</i> rest</figcaption></figure>' )
 		);
 	}
 
@@ -993,11 +1001,11 @@ HTML;
 			( new HTML_To_Markdown_Converter() )->convert( '<p>embeddings<em>.</em></p>' )
 		);
 		$this->assertSame(
-			'_The National<em>‘s latest issue</em>_',
+			'_The National‘s latest issue_',
 			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption>The National<em>‘s latest issue</em></figcaption></figure>' )
 		);
 		$this->assertSame(
-			'_*Caption (*[*Photo*](https://example.com/photo)<em>)</em>_',
+			'_Caption ([Photo](https://example.com/photo))_',
 			( new HTML_To_Markdown_Converter() )->convert( '<figure><figcaption><em>Caption (</em><a href="https://example.com/photo"><em>Photo</em></a><em>)</em></figcaption></figure>' )
 		);
 		$this->assertSame(
