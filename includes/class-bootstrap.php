@@ -36,7 +36,6 @@ class Bootstrap {
 	private function register_modules() {
 		$this->loader->add_action( 'init', $this, 'register_default_post_type_support', 5 );
 		$this->loader->add_action( 'init', $this, 'fire_block_markdown_registration', 5 );
-		add_filter( 'block_type_metadata', array( $this, 'inject_block_markdown_metadata' ), 10, 1 );
 
 		// Expose the current conversion context to registered block callbacks.
 		add_action( 'content_for_agents_set_context', array( Block_Markdown_Registry::class, 'set_context' ) );
@@ -46,16 +45,6 @@ class Bootstrap {
 		new Markdown_Cache_Invalidator( $this->loader );
 		new Discovery( $this->loader );
 		new Robots_Txt( $this->loader );
-	}
-
-	/**
-	 * Persist block-level markdown metadata into block supports.
-	 *
-	 * @param array $metadata Raw block metadata.
-	 * @return array
-	 */
-	public function inject_block_markdown_metadata( array $metadata ): array {
-		return Block_Markdown_Resolver::inject_metadata_into_supports( $metadata );
 	}
 
 	/**

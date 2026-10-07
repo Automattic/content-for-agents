@@ -11,9 +11,9 @@ namespace Content_For_Agents;
 /**
  * Converts WordPress post content to Markdown.
  *
- * Walks the parsed block tree. Metadata and registered callbacks can supply
- * Markdown; other blocks render to HTML for conversion. Wrappers with custom
- * descendants retain their content order.
+ * Walks the parsed block tree. Registered callbacks can supply Markdown;
+ * other blocks render to HTML for conversion. Wrappers with custom descendants
+ * retain their content order.
  *
  * @package Content_For_Agents
  */
@@ -92,25 +92,6 @@ class Markdown_Converter {
 				$trimmed = trim( $block['innerHTML'] ?? '' );
 				if ( '' !== $trimmed ) {
 					$parts[] = $this->convert_rendered_html( $trimmed, $converter );
-				}
-				continue;
-			}
-
-			$resolved = Block_Markdown_Resolver::resolve_strategy( $block_name, $block, $post );
-			if ( true === $resolved['handled'] ) {
-				if ( true === $resolved['recurse'] ) {
-					$inner = $block['innerBlocks'] ?? array();
-					if ( ! empty( $inner ) ) {
-						$inner_md = $this->blocks_to_markdown( $inner, $post );
-						if ( '' !== trim( $inner_md ) ) {
-							$parts[] = $inner_md;
-						}
-					}
-					continue;
-				}
-
-				if ( '' !== trim( (string) $resolved['markdown'] ) ) {
-					$parts[] = (string) $resolved['markdown'];
 				}
 				continue;
 			}
@@ -255,8 +236,8 @@ class Markdown_Converter {
 	/**
 	 * Whether any descendant needs custom Markdown handling.
 	 *
-	 * Detection does not execute callbacks. It only inspects registry entries and
-	 * registered block metadata, then recurses through the parsed block tree.
+	 * Detection does not execute callbacks. It inspects registry entries,
+	 * then recurses through the parsed block tree.
 	 *
 	 * @param array $blocks Descendant blocks.
 	 * @return bool Whether an innerContent zipper is required.
@@ -283,25 +264,7 @@ class Markdown_Converter {
 	 * @return bool Whether callback-aware traversal is needed.
 	 */
 	private function has_custom_markdown_strategy( string $block_name ): bool {
-		if ( 'core/embed' === $block_name ) {
-			return true;
-		}
-		if ( Block_Markdown_Registry::has( $block_name ) ) {
-			return true;
-		}
-
-		$config = Block_Markdown_Resolver::get_block_config( $block_name );
-		if ( null === $config ) {
-			return false;
-		}
-
-		$mode = isset( $config['mode'] ) ? sanitize_key( (string) $config['mode'] ) : 'html-fallback';
-		if ( in_array( $mode, array( 'strip', 'children-only' ), true ) ) {
-			return true;
-		}
-
-		$callback = $config['callback'] ?? null;
-		return is_string( $callback ) && is_callable( $callback );
+		return 'core/embed' === $block_name || Block_Markdown_Registry::has( $block_name );
 	}
 
 	/**

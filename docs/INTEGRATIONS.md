@@ -5,6 +5,52 @@ rules before serving or advertising Markdown. Sites can add visibility rules
 with `content_for_agents_can_serve_markdown`. Return `false` to hide a post
 from both responses and per-page discovery. The filter cannot grant access.
 
+## SEO descriptions in frontmatter
+
+The default frontmatter description comes from the WordPress excerpt, then the
+first Markdown paragraph. A site using Yoast SEO, Rank Math, or All in One SEO
+can replace it with that plugin's resolved post description. Put this in a site
+plugin or MU plugin. Keep only the branch for the SEO plugin that controls the
+site's HTML meta description if more than one is active.
+
+```php
+add_filter(
+	'content_for_agents_frontmatter',
+	static function ( array $data, WP_Post $post ): array {
+		$description = '';
+
+		if ( function_exists( 'YoastSEO' ) ) {
+			$meta        = YoastSEO()->meta->for_post( $post->ID );
+			$description = $meta ? $meta->description : '';
+		} elseif ( class_exists( '\RankMath\Paper\Singular' ) ) {
+			$paper = new \RankMath\Paper\Singular();
+			$paper->set_object( $post );
+			$description = $paper->description();
+		} elseif ( function_exists( 'aioseo' ) ) {
+			$description = aioseo()->meta->description->getPostDescription( $post );
+		}
+
+		if ( is_string( $description ) && '' !== trim( $description ) ) {
+			$data['description'] = html_entity_decode(
+				wp_strip_all_tags( $description ),
+				ENT_QUOTES | ENT_HTML5,
+				'UTF-8'
+			);
+		}
+
+		return $data;
+	},
+	10,
+	2
+);
+```
+
+If the selected helper returns no description, leaving `$data` unchanged keeps
+the plugin's excerpt fallback. These helpers select the post explicitly, but
+generated templates can still use the current query. SEO filters can also
+change the final HTML meta tag. Compare both outputs when installing the
+integration.
+
 ## Redirected or removed canonical URLs
 
 A redirect manager, SEO plugin, or site code may redirect a post's canonical

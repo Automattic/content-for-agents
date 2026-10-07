@@ -28,9 +28,8 @@ class Block_Markdown_Registry {
 	 * Current transformation context slug (e.g. 'email', 'plain-text', 'apple-news').
 	 * Empty string when no transformation is in progress.
 	 *
-	 * Set via do_action( 'content_for_agents_set_context', $slug ) by the
-	 * content transformer pipeline before calling post_to_markdown(), and cleared
-	 * via do_action( 'content_for_agents_clear_context' ) immediately after.
+	 * External integrations can set this before calling post_to_markdown()
+	 * and clear it immediately after.
 	 *
 	 * @var string
 	 */

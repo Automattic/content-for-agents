@@ -84,41 +84,9 @@ class Frontmatter {
 	 * @return array List of author entries.
 	 */
 	protected function get_authors( $post ) {
-		$authors = array();
-
-		// Filters are expected to return arrays of entries with at minimum a `name`
-		// key, and optionally `job_title` and `link` (e.g. from an author plugin).
-		$bylines = apply_filters( 'content_for_agents_authors', array(), $post );
-		if ( ! empty( $bylines ) ) {
-			foreach ( $bylines as $byline ) {
-				if ( is_string( $byline ) ) {
-					$authors[] = array( 'name' => $byline );
-					continue;
-				}
-
-				$entry = array( 'name' => $byline['name'] ?? '' );
-
-				foreach ( array( 'job_title', 'link' ) as $field ) {
-					if ( ! empty( $byline[ $field ] ) ) {
-						$entry[ $field ] = $byline[ $field ];
-					}
-				}
-
-				$authors[] = $entry;
-			}
-		}
-
-		if ( empty( $authors ) ) {
-			$author = get_user_by( 'id', $post->post_author );
-			$name   = $author ? $author->display_name : '';
-			if ( $name ) {
-				$authors[] = array( 'name' => $name );
-			} else {
-				$authors[] = array( 'name' => html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
-			}
-		}
-
-		return $authors;
+		$author = get_user_by( 'id', $post->post_author );
+		$name   = $author ? $author->display_name : '';
+		return array( array( 'name' => $name ? $name : html_entity_decode( get_bloginfo( 'name' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) );
 	}
 
 	/**

@@ -18,18 +18,50 @@ use Content_For_Agents\Markdown_Response;
  */
 class MarkdownConversionTest extends \WP_UnitTestCase {
 	/**
-	 * A visible H1 takes precedence over the title stored in frontmatter.
+	 * The default title prefix can be replaced or removed by an integration.
 	 */
-	public function test_response_does_not_repeat_rendered_title_heading(): void {
-		$method = new \ReflectionMethod( Markdown_Response::class, 'get_title_heading' );
+	public function test_title_heading_prefix_can_be_filtered(): void {
+		$method = new \ReflectionMethod( Markdown_Response::class, 'get_markdown_prefix' );
+		$post   = self::factory()->post->create_and_get();
+		$body   = "# Body heading\n\nBody text.";
 
-		$this->assertSame( '', $method->invoke( null, 'Contact WordPress VIP', "# Contact WordPress VIP\n\nBody" ) );
-		$this->assertSame( '', $method->invoke( null, 'Document title', "# Different heading\n\nBody" ) );
-		$this->assertSame( '', $method->invoke( null, 'How <em>The New Yorker</em> works', "# How *The New Yorker* works\n\nBody" ) );
-		$this->assertSame( "# Document title\n\n", $method->invoke( null, 'Document title', "## Section heading\n\nBody" ) );
-		$this->assertSame( '', $method->invoke( null, 'Product Terms', "Intro paragraph.\n\n# Product Terms\n\nBody" ) );
-		$this->assertSame( '', $method->invoke( null, 'Stored title', "Intro paragraph.\n\n# Visible heading\n\nBody" ) );
-		$this->assertSame( "# Stored title\n\n", $method->invoke( null, 'Stored title', "```text\n# Code comment\n```\n\nBody" ) );
+		$this->assertSame( "# Stored title\n\n", $method->invoke( null, 'Stored title', $post, $body ) );
+
+		$replace_prefix = function ( $prefix, $seen_post, $seen_body ) use ( $post, $body ): string {
+			$this->assertSame( "# Stored title\n\n", $prefix );
+			$this->assertSame( $post, $seen_post );
+			$this->assertSame( $body, $seen_body );
+			return "# Custom title\n\nAdditional context.\n\n";
+		};
+		add_filter( 'content_for_agents_markdown_prefix', $replace_prefix, 10, 3 );
+		try {
+			$this->assertSame( "# Custom title\n\nAdditional context.\n\n", $method->invoke( null, 'Stored title', $post, $body ) );
+		} finally {
+			remove_filter( 'content_for_agents_markdown_prefix', $replace_prefix, 10 );
+		}
+
+		$skip_prefix = static fn(): string => '';
+		add_filter( 'content_for_agents_markdown_prefix', $skip_prefix );
+		try {
+			$this->assertSame( '', $method->invoke( null, 'Stored title', $post, $body ) );
+		} finally {
+			remove_filter( 'content_for_agents_markdown_prefix', $skip_prefix );
+		}
+	}
+
+	/**
+	 * The WordPress title is prefixed even when the body has its own H1.
+	 */
+	public function test_response_defaults_to_title_heading(): void {
+		$method = new \ReflectionMethod( Markdown_Response::class, 'get_markdown_prefix' );
+		$post   = self::factory()->post->create_and_get();
+		$body   = "# Contact WordPress VIP\n\nBody";
+
+		$this->assertSame( "# Contact WordPress VIP\n\n$body", $method->invoke( null, 'Contact WordPress VIP', $post, $body ) . $body );
+		$this->assertSame( "# Document title\n\n", $method->invoke( null, 'Document title', $post, "# Different heading\n\nBody" ) );
+		$this->assertSame( "# How *The New Yorker* works\n\n", $method->invoke( null, 'How <em>The New Yorker</em> works', $post, "# How *The New Yorker* works\n\nBody" ) );
+		$this->assertSame( "# Document title\n\n", $method->invoke( null, 'Document title', $post, "## Section heading\n\nBody" ) );
+		$this->assertSame( '', $method->invoke( null, '', $post, 'Body' ) );
 	}
 
 	/**
@@ -46,20 +78,33 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Number of metadata callback executions in the current test.
-	 *
-	 * @var int
+	 * The frontmatter filter can replace the default WordPress author.
 	 */
-	private static int $metadata_callback_executions = 0;
+	public function test_frontmatter_filter_can_replace_authors(): void {
+		$author_id = self::factory()->user->create( array( 'display_name' => 'WordPress Author' ) );
+		$post      = self::factory()->post->create_and_get( array( 'post_author' => $author_id ) );
+		$override  = function ( array $data, \WP_Post $seen_post ) use ( $post ): array {
+			$this->assertSame( $post->ID, $seen_post->ID );
+			$this->assertSame( array( array( 'name' => 'WordPress Author' ) ), $data['authors'] );
+			$data['authors'] = array(
+				array(
+					'name'      => 'Staff Byline',
+					'job_title' => 'Editor',
+				),
+			);
+			return $data;
+		};
 
-	/**
-	 * Test callback referenced by contentForAgents metadata.
-	 *
-	 * @return string Callback Markdown.
-	 */
-	public static function metadata_markdown_callback(): string {
-		++self::$metadata_callback_executions;
-		return 'Metadata parent callback';
+		add_filter( 'content_for_agents_frontmatter', $override, 10, 2 );
+		try {
+			$yaml = ( new \Content_For_Agents\Frontmatter() )->build( $post );
+		} finally {
+			remove_filter( 'content_for_agents_frontmatter', $override, 10 );
+		}
+
+		$this->assertStringContainsString( '"name": "Staff Byline"', $yaml );
+		$this->assertStringContainsString( '"job_title": "Editor"', $yaml );
+		$this->assertStringNotContainsString( 'WordPress Author', $yaml );
 	}
 
 	/**
@@ -190,41 +235,6 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 				$fixture['name']
 			);
 		}
-	}
-
-	/**
-	 * Parent metadata callbacks take precedence over parent registry callbacks.
-	 */
-	public function test_parent_metadata_callback_precedes_parent_registry_callback(): void {
-		$registry_executions                = 0;
-		self::$metadata_callback_executions = 0;
-		register_block_type(
-			'content-for-agents/metadata-parent',
-			array(
-				'supports' => array(
-					'contentForAgents' => array(
-						'callback' => self::class . '::metadata_markdown_callback',
-					),
-				),
-			)
-		);
-		Block_Markdown_Registry::register(
-			'content-for-agents/metadata-parent',
-			static function () use ( &$registry_executions ): string {
-				++$registry_executions;
-				return 'Registry parent callback';
-			}
-		);
-
-		try {
-			$markdown = $this->convert_post_content( '<!-- wp:content-for-agents/metadata-parent /-->' );
-		} finally {
-			unregister_block_type( 'content-for-agents/metadata-parent' );
-		}
-
-		$this->assertSame( 'Metadata parent callback', $markdown );
-		$this->assertSame( 1, self::$metadata_callback_executions );
-		$this->assertSame( 0, $registry_executions );
 	}
 
 	/**
@@ -579,24 +589,18 @@ HTML;
 	}
 
 	/**
-	 * Strip and children-only metadata force ordered zipper conversion.
+	 * Block callbacks can omit a wrapper or its entire subtree in a mixed group.
 	 */
-	public function test_metadata_modes_force_zipping_and_preserve_owned_siblings(): void {
-		register_block_type(
+	public function test_block_callbacks_preserve_owned_siblings_when_omitting_content(): void {
+		Block_Markdown_Registry::register(
 			'content-for-agents/strip-block',
-			array(
-				'supports' => array(
-					'contentForAgents' => array( 'mode' => 'strip' ),
-				),
-			)
+			static fn(): string => ''
 		);
-		register_block_type(
+		Block_Markdown_Registry::register(
 			'content-for-agents/children-only-block',
-			array(
-				'supports' => array(
-					'contentForAgents' => array( 'mode' => 'children-only' ),
-				),
-			)
+			static function ( array $block, \WP_Post $post ): string {
+				return ( new Markdown_Converter() )->blocks_to_markdown( $block['innerBlocks'] ?? array(), $post );
+			}
 		);
 
 		$content = <<<'HTML'
@@ -605,12 +609,7 @@ HTML;
 <!-- /wp:group -->
 HTML;
 
-		try {
-			$markdown = $this->convert_post_content( $content );
-		} finally {
-			unregister_block_type( 'content-for-agents/strip-block' );
-			unregister_block_type( 'content-for-agents/children-only-block' );
-		}
+		$markdown = $this->convert_post_content( $content );
 
 		$this->assertSame( "Owned before.\n\nKept child.\n\nOwned after.", $markdown );
 		$this->assertStringNotContainsString( 'STRIPPED SENTINEL', $markdown );
@@ -1291,33 +1290,21 @@ HTML;
 	}
 
 	/**
-	 * Html-fallback metadata does not turn a native list item into a callback.
+	 * A native list item keeps its marker beside a callback-owned sibling.
 	 */
-	public function test_ordered_list_html_fallback_metadata_keeps_marker(): void {
-		$block_type = \WP_Block_Type_Registry::get_instance()->get_registered( 'core/list-item' );
-		$this->assertNotNull( $block_type );
-		$supports = $block_type->supports;
-
-		$block_type->supports['contentForAgents'] = array( 'mode' => 'html-fallback' );
-
-		try {
-			Block_Markdown_Registry::register(
-				'content-for-agents/list-metadata-trigger',
-				static function (): string {
-					return '6. Callback item';
-				}
-			);
-			$content = <<<'HTML'
+	public function test_ordered_list_native_item_keeps_marker_beside_callback(): void {
+		Block_Markdown_Registry::register(
+			'content-for-agents/list-callback-item',
+			static fn(): string => '6. Callback item'
+		);
+		$content = <<<'HTML'
 <!-- wp:list {"ordered":true,"start":5} -->
 <ol class="wp-block-list" start="5"><!-- wp:list-item -->
 <li>Native item</li>
-<!-- /wp:list-item --><!-- wp:content-for-agents/list-metadata-trigger /--></ol>
+<!-- /wp:list-item --><!-- wp:content-for-agents/list-callback-item /--></ol>
 <!-- /wp:list -->
 HTML;
-			$this->assertSame( "5. Native item\n6. Callback item", $this->convert_post_content( $content ) );
-		} finally {
-			$block_type->supports = $supports;
-		}
+		$this->assertSame( "5. Native item\n6. Callback item", $this->convert_post_content( $content ) );
 	}
 
 	/**

@@ -72,7 +72,7 @@ The main responsibilities are divided as follows:
 | ------------------------------- | -------------------------------------------------------------------------------- |
 | Plugin initialization and hooks | `Bootstrap`, `Loader`                                                            |
 | Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                         |
-| Block conversion                | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`       |
+| Block conversion                | `Markdown_Converter`, `Block_Markdown_Registry`                                  |
 | HTML conversion                 | `HTML_To_Markdown_Converter`, `Markdown_Inline_Buffer`, `Markdown_Output_Writer` |
 | Document metadata               | `Frontmatter`                                                                    |
 | Discovery                       | `Discovery`, `Robots_Txt`                                                        |
@@ -130,7 +130,7 @@ their original form so the tests can compare them with generated Markdown.
 
 ## Common change recipes
 
-- To support a custom block, use the registry or block metadata described in
+- To support a custom block, use the callback registry described in
   [Extend the base](PLUGIN-GUIDE.md#extend-the-base).
 - To expose another post type, add the `content-for-agents` support flag.
 - When related data changes, identify the affected post IDs and use the public

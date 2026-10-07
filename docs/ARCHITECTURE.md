@@ -15,18 +15,15 @@ flowchart TD
     D -- Returns null --> E[Parse post_content into blocks]
     E --> F{Freeform content?}
     F -- Yes --> I[Prepare content and convert HTML to Markdown]
-    F -- No --> G{Metadata handles block?}
-    G -- Yes --> H[Use result or recurse into children]
-    G -- No --> K{Registered callback?}
+    F -- No --> K{Registered callback?}
     K -- Yes --> S[Use callback Markdown]
     K -- No --> L[Block HTML fallback]
     L --> I
-    H --> J
     S --> J
     I --> J
     J --> M[Build frontmatter from post and body]
     M --> N[Apply content_for_agents_after_markdown to body]
-    N --> O[Add title heading if body has no H1]
+    N --> O[Filter default title prefix]
     O --> P[Join frontmatter and body; cache if allowed]
     P --> Z
 ```
@@ -38,14 +35,10 @@ It processes each block in order:
 
 1. Freeform or Classic Editor content has no block name. It goes through the
    HTML conversion path. Block-level callbacks do not run for it.
-2. Registered block metadata is checked first. `strip` suppresses the block;
-   `children-only` converts its children; a callable metadata callback supplies
-   Markdown. An empty callback result suppresses the block. An absent or
-   non-callable metadata callback lets processing continue.
-3. A callback in `Block_Markdown_Registry` receives the parsed block and post.
+2. A callback in `Block_Markdown_Registry` receives the parsed block and post.
    Its return value is Markdown, including an empty string that suppresses the
-   block. Only this path runs the `content_for_agents_block_{block-name}` filter.
-4. Otherwise, the block takes the HTML fallback described below.
+   block. This path runs the `content_for_agents_block_{block-name}` filter.
+3. Otherwise, the block takes the HTML fallback described below.
 
 If a wrapper contains a descendant with its own Markdown strategy, the
 converter walks its `innerContent` fragments and child blocks in source order.
@@ -91,7 +84,7 @@ The descendant path avoids rendering a wrapper as one HTML string when a child
 needs a Markdown callback. `innerContent` contains the wrapper's HTML fragments
 and placeholders for its children. The converter processes those in order:
 wrapper fragments take the HTML path, while child blocks take their own
-metadata, callback, or fallback path. `core/quote` reapplies quote markers to
+callback or fallback path. `core/quote` reapplies quote markers to
 the combined result; `core/list` keeps native list markers and nesting.
 The plugin does not run `the_content` over the whole post.
 
@@ -118,8 +111,9 @@ as breaks inside headings or inline code.
 `content_for_agents_pre_markdown` can replace the entire body before block
 parsing. `Frontmatter` is built from the post and converted body, then
 `content_for_agents_after_markdown` can alter the served body. `Markdown_Response`
-adds a title heading only when that final body has no H1, joins it with the
-frontmatter, and caches the response only when shared caching is allowed.
+passes the default post-title H1 to `content_for_agents_markdown_prefix` after
+converting the body, places the result before that body, and caches the response
+only when shared caching is allowed.
 
 Direct calls to `post_to_markdown()` return the body. They do not build
 frontmatter or run `content_for_agents_after_markdown`.
