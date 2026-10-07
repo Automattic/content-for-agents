@@ -2,7 +2,7 @@
 
 SENTINEL-INLINE has **bold and *nested emphasis with `inline code`***, plus an [example link](https://example.com/docs).
 
-First line
+First line\
 Second line
 
 ---

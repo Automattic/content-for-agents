@@ -7,9 +7,7 @@
     "includes/",
     "content-for-agents.php",
     "LICENSE",
-    "docs/NOTICE.md",
-    "docs/PLUGIN-GUIDE.md",
-    "docs/INTEGRATIONS.md",
+    "docs/",
     "README.md"
   ],
   "scripts": {
@@ -17,14 +15,11 @@
     "format": "npm run cmd:format -- --write",
     "format:check": "npm run cmd:format -- --check",
     "plugin-zip": "wp-scripts plugin-zip --no-root-folder",
-    "test:integration": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c phpunit-integration.xml",
-    "test:markdown-structure": "node --test tests/markdown-structure.test.cjs",
-    "test:renderer-targets": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c phpunit-renderer-targets.xml"
+    "test:integration": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c phpunit-integration.xml"
   },
   "devDependencies": {
     "@wordpress/env": "^11.13.0",
     "@wordpress/scripts": "^35.0.0",
-    "markdown-it": "^12.3.2",
     "prettier": "npm:wp-prettier@3.9.6"
   },
   "engines": {

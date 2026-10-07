@@ -14,154 +14,229 @@ namespace Content_For_Agents;
  * Applies line, quote, and whitespace rules to caller-owned output state.
  */
 final class Markdown_Output_Writer {
-	/** Separate visible block content and discard separators around empty blocks. */
+	/** Render a text container after its visible children are complete. */
 	public function block_boundary( Markdown_Conversion_Context $context, bool $is_closer, bool $separate_on_open = false ): void {
 		if ( ! $is_closer ) {
-			$start = $this->container_snapshot( $context );
-			if ( $context->at_line_start && $this->has_active_list_item( $context ) ) {
-				$this->append_list_continuation( $context );
-			} elseif ( $separate_on_open && ! $context->at_line_start && ! $this->has_active_list_item( $context ) ) {
-				$this->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+			$inline = ! $separate_on_open && ! $context->at_line_start;
+			$this->open_frame( $context, 'block' );
+			$context->block_frames[ array_key_last( $context->block_frames ) ]['inline'] = $inline;
+			return;
+		}
+		$frame = $context->block_frames[ array_key_last( $context->block_frames ) ] ?? array();
+		$body  = $this->close_frame( $context, 'block' );
+		if ( '' !== trim( $body ) ) {
+			if ( '' !== trim( $context->output ) ) {
+				$this->mark_item_block( $context );
 			}
-			$start['content_offset'] = strlen( $context->output );
-			$context->block_starts[] = $start;
-			return;
-		}
-		$start = array_pop( $context->block_starts );
-		if ( null !== $start && ! $this->has_content_since( $context, $start['content_offset'] ) ) {
-			$this->restore_container( $context, $start );
-			return;
-		}
-		if ( ! $context->in_pre ) {
-			$this->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+			if ( $frame['inline'] ?? false ) {
+				$context->output       .= $body;
+				$context->at_line_start = false;
+				$this->ensure_blank_line( $context->output, $context->at_line_start );
+			} else {
+				$this->append_block( $context, $body );
+			}
 		}
 	}
 
-	/** Start or finish a quote container. */
+	/** Render a quote only after its child blocks are complete. */
 	public function quote_boundary( Markdown_Conversion_Context $context, bool $is_closer ): void {
-		if ( $is_closer ) {
-			$context->blockquote_depth = max( 0, $context->blockquote_depth - 1 );
-			$start                     = array_pop( $context->quote_starts );
-			if ( null !== $start && ! $this->has_content_since( $context, $start['content_offset'] ) ) {
-				$this->restore_container( $context, $start );
-				return;
-			}
-		} else {
-			$start = $this->container_snapshot( $context );
-			$this->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
-			$start['content_offset'] = strlen( $context->output );
-			$context->quote_starts[] = $start;
-			++$context->blockquote_depth;
+		if ( ! $is_closer ) {
+			$this->open_frame( $context, 'quote' );
 			return;
 		}
-		$this->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+		$trailing_blank = str_ends_with( $context->output, "\n\n" );
+		$body           = $this->close_frame( $context, 'quote' );
+		if ( '' === $body ) {
+			return;
+		}
+		if ( '' !== trim( $context->output ) ) {
+			$this->mark_item_block( $context );
+		}
+		$lines = explode( "\n", $body );
+		$quote = implode( "\n", array_map( static fn( string $line ): string => '' === $line ? '>' : '> ' . $line, $lines ) );
+		if ( $trailing_blank && ! $this->has_active_list_item( $context ) ) {
+			$quote .= "\n>";
+		}
+		$this->append_block( $context, $quote );
 	}
 
-	/** Start or finish a list container. */
+	/** Render a list after its item bodies have been collected. */
 	public function list_boundary( Markdown_Conversion_Context $context, string $type, bool $is_closer, ?int $start = null ): void {
-		if ( $is_closer ) {
-			$list = array_pop( $context->list_stack );
-			if ( null !== $list && ! $this->has_content_since( $context, $list['content_offset'] ) ) {
-				$this->restore_container( $context, $list );
-				return;
-			}
-		} else {
-			$list  = array(
-				'type'                => $type,
-				'index'               => null !== $start ? $start - 1 : 0,
-				'continuation_indent' => null,
-			);
-			$list += $this->container_snapshot( $context );
-			$this->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
-			$list['content_offset'] = strlen( $context->output );
-			$context->list_stack[]  = $list;
+		if ( ! $is_closer ) {
+			$this->open_frame( $context, 'list' );
+			$frame_index                                    = array_key_last( $context->block_frames );
+			$context->block_frames[ $frame_index ]['type']  = $type;
+			$context->block_frames[ $frame_index ]['index'] = null !== $start ? $start - 1 : 0;
 			return;
 		}
-		$this->ensure_blank_line( $context->output, $context->at_line_start, $context->blockquote_depth );
+		$body = $this->close_frame( $context, 'list' );
+		if ( '' !== $body ) {
+			if ( '' !== trim( $context->output ) ) {
+				$this->mark_item_block( $context );
+			}
+			$this->append_block( $context, $body );
+		}
 	}
 
-	/** Write a list item marker or finish its continuation. */
+	/** Prefix every line of an item after its child blocks are complete. */
 	public function list_item_boundary( Markdown_Conversion_Context $context, bool $is_closer ): void {
-		$depth = count( $context->list_stack );
-		if ( $is_closer ) {
-			if ( 0 < $depth ) {
-				$indent = $context->list_stack[ $depth - 1 ]['continuation_indent'];
-				if ( null !== $indent && str_ends_with( $context->output, "\n" . $indent ) ) {
-					$context->output        = substr( $context->output, 0, -strlen( $indent ) );
-					$context->at_line_start = true;
-				}
-				$context->list_stack[ $depth - 1 ]['continuation_indent'] = null;
-			}
+		if ( ! $is_closer ) {
+			$this->open_frame( $context, 'item' );
 			return;
 		}
-
-		$this->ensure_newline( $context->output, $context->at_line_start );
-		$indent = 1 < $depth && null !== $context->list_stack[ $depth - 2 ]['continuation_indent']
-			? $context->list_stack[ $depth - 2 ]['continuation_indent']
-			: str_repeat( '  ', max( 0, $depth - 1 ) );
-		$marker = '-';
-		if ( 0 < $depth && 'OL' === $context->list_stack[ $depth - 1 ]['type'] ) {
-			++$context->list_stack[ $depth - 1 ]['index'];
-			$marker = (string) $context->list_stack[ $depth - 1 ]['index'] . '.';
+		$frame       = $context->block_frames[ array_key_last( $context->block_frames ) ] ?? array();
+		$body        = $this->close_frame( $context, 'item' );
+		$frame_index = array_key_last( $context->block_frames );
+		$marker      = '-';
+		if ( null !== $frame_index && 'list' === $context->block_frames[ $frame_index ]['kind'] && 'OL' === $context->block_frames[ $frame_index ]['type'] ) {
+			++$context->block_frames[ $frame_index ]['index'];
+			$marker = (string) $context->block_frames[ $frame_index ]['index'] . '.';
 		}
-		$this->append_text( $context->output, $indent . $marker . ' ', $context->at_line_start, $context->blockquote_depth, true );
-		if ( 0 < $depth ) {
-			$context->list_stack[ $depth - 1 ]['continuation_indent'] = str_repeat( ' ', strlen( $indent . $marker . ' ' ) );
+		$indent = str_repeat( ' ', strlen( $marker ) + 1 );
+		$lines  = explode( "\n", $body );
+		$item   = $marker . ' ' . array_shift( $lines );
+		foreach ( $lines as $line ) {
+			$item .= "\n" . ( '' === $line ? '' : $indent . $line );
+		}
+		if ( null !== $frame_index && 'list' === $context->block_frames[ $frame_index ]['kind'] ) {
+			$this->save_list_content( $context, $context->block_frames[ $frame_index ]['parts'] );
+			$context->block_frames[ $frame_index ]['parts'][] = array(
+				'kind' => 'item',
+				'body' => $item,
+			);
+			$context->block_frames[ $frame_index ]['loose']   = ( $context->block_frames[ $frame_index ]['loose'] ?? false ) || ( $frame['structural_break'] ?? false );
+		} else {
+			$this->append_block( $context, $body );
+		}
+	}
+
+	/** Mark a block boundary inside the nearest item as structural. */
+	public function mark_item_block( Markdown_Conversion_Context $context ): void {
+		for ( $index = count( $context->block_frames ) - 1; $index >= 0; --$index ) {
+			if ( 'item' === $context->block_frames[ $index ]['kind'] ) {
+				$context->block_frames[ $index ]['structural_break'] = true;
+				return;
+			}
+		}
+	}
+
+	/** Whether a quote owns the current output stream. */
+	public function in_quote( Markdown_Conversion_Context $context ): bool {
+		foreach ( $context->block_frames as $frame ) {
+			if ( 'quote' === $frame['kind'] ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Complete containers left open by a source fragment. */
+	public function finish_open_blocks( Markdown_Conversion_Context $context ): void {
+		while ( ! empty( $context->block_frames ) ) {
+			$frame = $context->block_frames[ array_key_last( $context->block_frames ) ];
+			switch ( $frame['kind'] ) {
+				case 'item':
+					$this->list_item_boundary( $context, true );
+					break;
+				case 'list':
+					$this->list_boundary( $context, '', true );
+					break;
+				case 'quote':
+					$this->quote_boundary( $context, true );
+					break;
+				case 'block':
+					$this->block_boundary( $context, true );
+					break;
+			}
 		}
 	}
 
 	/** Whether the current list has an open item. */
 	public function has_active_list_item( Markdown_Conversion_Context $context ): bool {
-		if ( empty( $context->list_stack ) ) {
-			return false;
+		for ( $index = count( $context->block_frames ) - 1; $index >= 0; --$index ) {
+			if ( 'item' === $context->block_frames[ $index ]['kind'] ) {
+				return true;
+			}
+			if ( 'list' === $context->block_frames[ $index ]['kind'] ) {
+				return false;
+			}
 		}
-		$last = $context->list_stack[ count( $context->list_stack ) - 1 ];
-		return null !== $last['continuation_indent'];
+		return false;
 	}
 
-	/** Continue a new line inside the current list item. */
-	public function append_list_continuation( Markdown_Conversion_Context $context ): void {
-		$last = $context->list_stack[ count( $context->list_stack ) - 1 ];
-		$this->ensure_newline( $context->output, $context->at_line_start );
-		$this->append_text( $context->output, $last['continuation_indent'], $context->at_line_start, $context->blockquote_depth, true );
-	}
-
-	/** Whether output after an offset contains more than whitespace or quote prefixes. */
-	private function has_content_since( Markdown_Conversion_Context $context, int $offset ): bool {
-		$body = substr( $context->output, $offset );
-		$body = (string) preg_replace( '/^(?:>[ \t]*)*$/m', '', $body );
-		return '' !== trim( $body );
-	}
-
-	/** Save the trailing bytes that a container's opening separator may replace. */
-	private function container_snapshot( Markdown_Conversion_Context $context ): array {
-		$rollback_offset = strlen( $context->output );
-		while ( 0 < $rollback_offset && str_contains( " \t\n", $context->output[ $rollback_offset - 1 ] ) ) {
-			--$rollback_offset;
-		}
-		return array(
-			'rollback_offset' => $rollback_offset,
-			'rollback_suffix' => substr( $context->output, $rollback_offset ),
-			'content_offset'  => 0,
-			'at_line_start'   => $context->at_line_start,
+	/** Save the parent stream while an HTML block owns its children. */
+	private function open_frame( Markdown_Conversion_Context $context, string $kind ): void {
+		$context->block_frames[] = array(
+			'kind'             => $kind,
+			'output'           => $context->output,
+			'at_line_start'    => $context->at_line_start,
+			'parts'            => array(),
+			'loose'            => false,
+			'structural_break' => false,
 		);
+		$context->output         = '';
+		$context->at_line_start  = true;
 	}
 
-	/** Remove an empty container's separator and restore the prior line state. */
-	private function restore_container( Markdown_Conversion_Context $context, array $snapshot ): void {
-		$context->output        = substr( $context->output, 0, $snapshot['rollback_offset'] ) . $snapshot['rollback_suffix'];
-		$context->at_line_start = $snapshot['at_line_start'];
+	/** Restore the parent stream and return the completed child body. */
+	private function close_frame( Markdown_Conversion_Context $context, string $kind ): string {
+		$frame = $context->block_frames[ array_key_last( $context->block_frames ) ] ?? null;
+		if ( null === $frame || $kind !== $frame['kind'] ) {
+			return '';
+		}
+		$body = trim( $context->output, "\n" );
+		if ( 'list' === $kind ) {
+			$this->save_list_content( $context, $frame['parts'] );
+			$body     = '';
+			$previous = null;
+			foreach ( $frame['parts'] as $part ) {
+				if ( null !== $previous ) {
+					$body .= 'item' === $previous && 'item' === $part['kind'] && ! $frame['loose'] ? "\n" : "\n\n";
+				}
+				$body    .= $part['body'];
+				$previous = $part['kind'];
+			}
+		}
+		array_pop( $context->block_frames );
+		$context->output        = $frame['output'];
+		$context->at_line_start = $frame['at_line_start'];
+		return $body;
 	}
+
+	/**
+	 * Keep visible content between list items in source order.
+	 *
+	 * @param array<int, array{kind: string, body: string}> $parts Ordered list output segments.
+	 */
+	private function save_list_content( Markdown_Conversion_Context $context, array &$parts ): void {
+		$content = trim( $context->output, "\n" );
+		if ( '' !== trim( $content ) ) {
+			$parts[] = array(
+				'kind' => 'content',
+				'body' => $content,
+			);
+		}
+		$context->output        = '';
+		$context->at_line_start = true;
+	}
+
+	/** Join completed block output to its parent stream. */
+	private function append_block( Markdown_Conversion_Context $context, string $body ): void {
+		$this->ensure_blank_line( $context->output, $context->at_line_start );
+		$context->output       .= $body;
+		$context->at_line_start = false;
+		$this->ensure_blank_line( $context->output, $context->at_line_start );
+	}
+
 	/**
 	 * Append text to Markdown output.
 	 *
 	 * @param string $markdown            Markdown buffer (by reference).
 	 * @param string $text                Text to append.
 	 * @param bool   $at_line_start       Whether output is at the start of a line (by reference).
-	 * @param int    $blockquote_depth    Current blockquote depth.
 	 * @param bool   $preserve_whitespace Whether to preserve whitespace.
 	 */
-	public function append_text( string &$markdown, string $text, bool &$at_line_start, int $blockquote_depth, bool $preserve_whitespace = false ): void {
+	public function append_text( string &$markdown, string $text, bool &$at_line_start, bool $preserve_whitespace = false ): void {
 		if ( '' === $text ) {
 			return;
 		}
@@ -175,18 +250,6 @@ final class Markdown_Output_Writer {
 			}
 			if ( '' === $text ) {
 				return;
-			}
-		}
-
-		if ( $at_line_start && 0 < $blockquote_depth ) {
-			$markdown .= str_repeat( '> ', $blockquote_depth );
-		}
-
-		if ( $preserve_whitespace && 0 < $blockquote_depth ) {
-			$prefix = str_repeat( '> ', $blockquote_depth );
-			$text   = str_replace( "\n", "\n" . $prefix, $text );
-			if ( str_ends_with( $text, "\n" . $prefix ) ) {
-				$text = substr( $text, 0, -strlen( $prefix ) );
 			}
 		}
 
@@ -219,11 +282,10 @@ final class Markdown_Output_Writer {
 	 * @param string $markdown         Markdown buffer (by reference).
 	 * @param string $line             Line content.
 	 * @param bool   $at_line_start    Whether output is at the start of a line (by reference).
-	 * @param int    $blockquote_depth Current blockquote depth.
 	 */
-	public function append_line( string &$markdown, string $line, bool &$at_line_start, int $blockquote_depth ): void {
+	public function append_line( string &$markdown, string $line, bool &$at_line_start ): void {
 		$this->ensure_newline( $markdown, $at_line_start );
-		$this->append_text( $markdown, $line, $at_line_start, $blockquote_depth, true );
+		$this->append_text( $markdown, $line, $at_line_start, true );
 		$this->append_newline( $markdown, $at_line_start );
 	}
 
@@ -246,19 +308,9 @@ final class Markdown_Output_Writer {
 	 *
 	 * @param string $markdown         Markdown buffer (by reference).
 	 * @param bool   $at_line_start    Whether output is at the start of a line (by reference).
-	 * @param int    $blockquote_depth Current blockquote depth.
 	 */
-	public function ensure_blank_line( string &$markdown, bool &$at_line_start, int $blockquote_depth = 0 ): void {
-		$markdown = rtrim( $markdown, " \t" );
-		if ( $blockquote_depth > 0 ) {
-			$separator = "\n" . rtrim( str_repeat( '> ', $blockquote_depth ) ) . "\n";
-			if ( ! str_ends_with( $markdown, $separator ) ) {
-				$markdown = rtrim( $markdown, "\n" ) . $separator;
-			}
-			$at_line_start = true;
-			return;
-		}
-
+	public function ensure_blank_line( string &$markdown, bool &$at_line_start ): void {
+		$markdown      = rtrim( $markdown, " \t" );
 		$markdown      = rtrim( $markdown, "\n" );
 		$markdown     .= "\n\n";
 		$at_line_start = true;

@@ -161,11 +161,11 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Emphasis crossing a line break must remain valid Markdown.
+	 * Emphasis contains the source HTML break.
 	 */
-	public function test_line_break_closes_and_reopens_emphasis(): void {
+	public function test_line_break_stays_inside_emphasis(): void {
 		$this->assertSame(
-			"**First**\n**Second**",
+			"**First\\\nSecond**",
 			( new HTML_To_Markdown_Converter() )->convert( '<p><strong>First<br>Second</strong></p>' )
 		);
 	}
@@ -501,7 +501,7 @@ HTML;
 	public function test_nested_bold_citation_has_one_markdown_span(): void {
 		$html = '<blockquote><p>Quote</p><cite><strong><strong>D</strong>an Stubbs<br></strong>VP Analytics</cite></blockquote>';
 		$this->assertSame(
-			"> Quote\n>\n> — **Dan Stubbs**\n> VP Analytics",
+			"> Quote\n>\n> — <strong>Dan Stubbs<br></strong>VP Analytics",
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 	}
@@ -527,7 +527,7 @@ HTML;
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 		$this->assertSame( '\\_\\_\\_', ( new HTML_To_Markdown_Converter() )->convert( '<p>___</p>' ) );
-		$this->assertSame( "Code\n\\# comment\n\\---", ( new HTML_To_Markdown_Converter() )->convert( '<p>Code<br># comment<br>---</p>' ) );
+		$this->assertSame( "Code\\\n\\# comment\\\n\\---", ( new HTML_To_Markdown_Converter() )->convert( '<p>Code<br># comment<br>---</p>' ) );
 		$this->assertSame( '#### Manufacturers of Consent: 1990s \#', ( new HTML_To_Markdown_Converter() )->convert( '<h4>Manufacturers of Consent: 1990s #</h4>' ) );
 		$this->assertSame(
 			'\[\<a href=”//example.com”\>Story\</a\>\]',
@@ -697,11 +697,11 @@ HTML;
 	public function test_heading_line_break_keeps_entire_heading(): void {
 		$html = '<h2>What you can’t audit, <br>you can’t govern</h2><p>Details follow.</p>';
 		$this->assertSame(
-			"## What you can’t audit, you can’t govern\n\nDetails follow.",
+			"## What you can’t audit,<br>you can’t govern\n\nDetails follow.",
 			( new HTML_To_Markdown_Converter() )->convert( $html )
 		);
 		$this->assertSame(
-			'## “Code for the People” is a clear-eyed take on the state of the internet.',
+			'## “Code for the People” is a<br>clear-eyed take on the state<br>of the internet.',
 			( new HTML_To_Markdown_Converter() )->convert( '<h2>“Code for the People” is a <br>clear-eyed take on the state <br>of the internet.</h2>' )
 		);
 	}
@@ -1040,7 +1040,22 @@ HTML;
 	 */
 	public function test_line_breaks_keep_list_item_continuation(): void {
 		$html = '<ol><li>Definitions<br><br>Analytics report<br><br>More terms</li><li>Licenses</li></ol>';
-		$this->assertSame( "1. Definitions\n\n   Analytics report\n\n   More terms\n2. Licenses", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame( "1. Definitions\\\n   \\\n   Analytics report\\\n   \\\n   More terms\n2. Licenses", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+	}
+
+	/** Freeform HTML may contain visible content beside list items. */
+	public function test_list_keeps_visible_content_outside_items(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame( "Before\n\n- Item\n\nAfter", $converter->convert( '<ul>Before<li>Item</li>After</ul>' ) );
+		$this->assertSame( "- Item\n\nAfter", $converter->convert( '<ul><li>Item</li><div>After</div></ul>' ) );
+	}
+
+	/** A table caption is visible even though it is outside the cells. */
+	public function test_table_caption_remains_visible(): void {
+		$html = '<table><caption>Sales by region</caption><tr><th>Region</th></tr><tr><td>East</td></tr></table>';
+		$this->assertSame( "Sales by region\n\n| Region |\n| --- |\n| East |", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$html = '<table><caption><strong>Sales</strong> by region</caption><tr><th>Region</th></tr><tr><td>East</td></tr></table>';
+		$this->assertSame( "**Sales** by region\n\n| Region |\n| --- |\n| East |", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
 	}
 
 	/**
@@ -1067,7 +1082,7 @@ HTML;
 		$this->assertSame( '```` ``` ````', $converter->convert( '<code>```</code>' ) );
 		$this->assertSame( "````\n```\n````", $converter->convert( '<pre>&#96;&#96;&#96;</pre>' ) );
 		$this->assertSame( '`` ` ``', $converter->convert( '<code>&#96;</code>' ) );
-		$this->assertSame( '`foo bar`', $converter->convert( '<code>foo<br>bar</code>' ) );
+		$this->assertSame( '<code>foo<br>bar</code>', $converter->convert( '<code>foo<br>bar</code>' ) );
 		$this->assertSame( '`  x  `', $converter->convert( '<code> x </code>' ) );
 		$this->assertSame( '` `', $converter->convert( '<code> </code>' ) );
 		$this->assertSame( "```\nabc\n```", $converter->convert( '<pre>abc' ) );
@@ -1079,7 +1094,7 @@ HTML;
 	 */
 	public function test_non_code_whitespace_is_normalized(): void {
 		$html = '<p>Hello </p><p>World</p><p>A<br><br><br>B</p>';
-		$this->assertSame( "Hello\n\nWorld\n\nA\n\nB", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame( "Hello\n\nWorld\n\nA\\\n\\\n\\\nB", ( new HTML_To_Markdown_Converter() )->convert( $html ) );
 	}
 
 	/**

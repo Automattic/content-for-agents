@@ -2,7 +2,8 @@
 
 This guide covers the quickest path from a new checkout to a validated change.
 The public behavior and supported extension contracts are documented in the
-[plugin guide](PLUGIN-GUIDE.md).
+[plugin guide](PLUGIN-GUIDE.md). See the [conversion architecture](ARCHITECTURE.md)
+for callback precedence and the HTML fallback.
 
 ## Table of contents
 
@@ -45,7 +46,6 @@ The development site uses <http://localhost:8910> and the test site uses port
 `8911` by default. If those ports are busy, run `npx wp-env start --auto-port`
 and use the printed URLs. Sign in at `/wp-admin/` with the default `wp-env`
 credentials (`admin` / `password`). Run `npx wp-env stop` when finished.
-Dependencies, test output, browser artifacts, and ZIP files are ignored by Git.
 
 ## Architecture and request lifecycle
 
@@ -60,19 +60,23 @@ content-for-agents.php
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
-  -> cache invalidators: affected Markdown URLs are purged
+  -> Markdown_Response: final body filter, headers, and caching
 ```
+
+On content and metadata changes, `Markdown_Cache_Invalidator` clears cached
+documents and purges affected URLs separately from the request flow.
 
 The main responsibilities are divided as follows:
 
-| Area                            | Primary classes                                                                                          |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Plugin initialization and hooks | `Bootstrap`, `Loader`                                                                                    |
-| Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                                                 |
-| Block and HTML conversion       | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`, `HTML_To_Markdown_Converter` |
-| Document metadata               | `Frontmatter`                                                                                            |
-| Discovery                       | `Discovery`, `Robots_Txt`                                                                                |
-| Cache invalidation              | `Markdown_Cache_Invalidator`                                                                             |
+| Area                            | Primary classes                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| Plugin initialization and hooks | `Bootstrap`, `Loader`                                                            |
+| Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                         |
+| Block conversion                | `Markdown_Converter`, `Block_Markdown_Resolver`, `Block_Markdown_Registry`       |
+| HTML conversion                 | `HTML_To_Markdown_Converter`, `Markdown_Inline_Buffer`, `Markdown_Output_Writer` |
+| Document metadata               | `Frontmatter`                                                                    |
+| Discovery                       | `Discovery`, `Robots_Txt`                                                        |
+| Cache invalidation              | `Markdown_Cache_Invalidator`                                                     |
 
 Public PHP classes are direct members of the `Content_For_Agents` namespace.
 Integration plugins use their own namespaces and autoloaders. Preserve the
@@ -90,13 +94,14 @@ It does not look up unresolved post IDs.
 | Layer                 | What it verifies                                                               | Command or method                    |
 | --------------------- | ------------------------------------------------------------------------------ | ------------------------------------ |
 | PHP unit              | Isolated behavior that does not require WordPress                              | `composer test:unit`                 |
-| WordPress integration | WordPress hooks, content conversion, and access behavior                       | `npm run test:integration`           |
-| Markdown structure    | How a Markdown parser interprets the exact-output fixtures                     | `npm run test:markdown-structure`    |
+| WordPress integration | WordPress hooks, conversion, Markdown structure, and access behavior           | `npm run test:integration`           |
 | Manual UI             | Public Markdown output in a real browser                                       | Exercise public URLs in a browser    |
 | VIP deployment        | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application |
 
 Start `wp-env` before running the integration suite. Its bootstrap loads the
-base plugin. Deployment checks cannot be fully reproduced by `wp-env`.
+base plugin. The suite uses a development-only Markdown parser to check how a
+reader interprets the exact-output fixtures. Deployment checks cannot be fully
+reproduced by `wp-env`.
 
 Tests should be added at the lowest layer that proves the behavior. Changes to
 WordPress hooks, permissions, conversion integration, or cache invalidation
@@ -114,7 +119,6 @@ composer check-platform-reqs
 composer phpcs
 composer test:unit
 npm run format:check
-npm run test:markdown-structure
 npx wp-env start
 npm run test:integration
 git diff --check
@@ -123,8 +127,6 @@ git diff --check
 Use `composer phpcs-fix` to apply PHP style fixes and `npm run format` to format
 Markdown, JSON, and YAML files. The exact-output conversion fixtures are kept in
 their original form so the tests can compare them with generated Markdown.
-`npm run test:renderer-targets` runs the separate, currently failing list-nesting
-target. It is excluded from CI until the renderer rewrite satisfies it.
 
 ## Common change recipes
 
