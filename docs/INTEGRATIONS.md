@@ -5,6 +5,46 @@ rules before serving or advertising Markdown. Sites can add visibility rules
 with `content_for_agents_can_serve_markdown`. Return `false` to hide a post
 from both responses and per-page discovery. The filter cannot grant access.
 
+## SEO descriptions in frontmatter
+
+The default frontmatter description comes from the WordPress excerpt, then the
+first blank-line-delimited Markdown segment. A site using Rank Math can replace it with Rank Math's
+resolved post description. Put this in a site plugin or MU plugin.
+
+```php
+add_filter(
+	'content_for_agents_frontmatter',
+	static function ( array $data, WP_Post $post ): array {
+		if ( ! class_exists( '\RankMath\Paper\Singular' ) ) {
+			return $data;
+		}
+
+		$paper = new \RankMath\Paper\Singular();
+		$paper->set_object( $post );
+		$description = $paper->description();
+
+		if ( is_string( $description ) && '' !== trim( $description ) ) {
+			$data['description'] = html_entity_decode(
+				wp_strip_all_tags( $description ),
+				ENT_QUOTES | ENT_HTML5,
+				'UTF-8'
+			);
+		}
+
+		return $data;
+	},
+	10,
+	2
+);
+```
+
+Rank Math's singular description uses the post's SEO description, excerpt, or
+post-type description template. If it returns no description, leaving `$data`
+unchanged keeps the plugin's fallback. The example selects the post explicitly,
+but template variables can still depend on the current query. Rank Math's
+`rank_math/frontend/description` filter can also change the final HTML meta tag.
+Compare both outputs when installing the integration.
+
 ## Redirected or removed canonical URLs
 
 A redirect manager, SEO plugin, or site code may redirect a post's canonical

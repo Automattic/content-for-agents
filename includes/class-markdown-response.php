@@ -55,15 +55,7 @@ class Markdown_Response {
 		$title     = trim( preg_replace( '/\s+/u', ' ', $title ) ?? $title );
 
 		if ( ! is_string( $content ) || '' === $content ) {
-			$converter   = new Markdown_Converter();
-			$frontmatter = new Frontmatter();
-
-			$markdown_body = $converter->post_to_markdown( $post );
-			$yaml          = $frontmatter->build( $post, $markdown_body );
-
-			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
-
-			$content = $yaml . self::get_title_heading( $title, $markdown_body ) . $markdown_body;
+			$content = self::build_content( $post, $title );
 
 			if ( $cacheable ) {
 				// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- CACHE_TTL is one hour.
@@ -88,48 +80,45 @@ class Markdown_Response {
 	}
 
 	/**
-	 * Add a document title only when the rendered body has no H1.
+	 * Build the uncached response, including frontmatter and filtered body.
 	 *
-	 * @param string $title         Normalized document title.
-	 * @param string $markdown_body Rendered post content.
-	 * @return string Markdown heading or an empty string.
+	 * @param \WP_Post $post  Post being rendered.
+	 * @param string   $title Normalized WordPress post title.
+	 * @return string Complete Markdown document.
 	 */
-	private static function get_title_heading( string $title, string $markdown_body ): string {
-		if ( '' === $title ) {
-			return '';
-		}
-		if ( self::has_body_h1( $markdown_body ) ) {
-			return '';
-		}
+	private static function build_content( \WP_Post $post, string $title ): string {
+		$markdown_body = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$yaml          = ( new Frontmatter() )->build( $post, $markdown_body );
+		$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
 
-		$markdown_title = ( new HTML_To_Markdown_Converter() )->convert( $title );
-		return "# $markdown_title\n\n";
+		// Build the prefix after conversion so its filter can inspect the final body.
+		return $yaml . self::get_markdown_prefix( $title, $post, $markdown_body ) . $markdown_body;
 	}
 
 	/**
-	 * Find a document heading without treating fenced code as a heading.
+	 * Build the Markdown prefix shown before post content.
 	 *
-	 * @param string $markdown_body Rendered post content.
-	 * @return bool Whether the body has an H1.
+	 * @param string   $title         Normalized WordPress post title.
+	 * @param \WP_Post $post          Post being rendered.
+	 * @param string   $markdown_body Rendered post content.
+	 * @return string Markdown prefix, including any spacing before the body.
 	 */
-	private static function has_body_h1( string $markdown_body ): bool {
-		$fence = '';
-		foreach ( preg_split( '/\r\n|\r|\n/', $markdown_body ) as $line ) {
-			if ( '' !== $fence ) {
-				if ( preg_match( '/^ {0,3}' . preg_quote( $fence, '/' ) . preg_quote( $fence[0], '/' ) . '*[ \t]*$/', $line ) ) {
-					$fence = '';
-				}
-				continue;
-			}
-			if ( preg_match( '/^ {0,3}(`{3,}|~{3,})/', $line, $matches ) ) {
-				$fence = $matches[1];
-				continue;
-			}
-			if ( preg_match( '/^ {0,3}#(?:[ \t]+|$)/', $line ) ) {
-				return true;
-			}
-		}
-		return false;
+	private static function get_markdown_prefix( string $title, \WP_Post $post, string $markdown_body ): string {
+		$markdown_title = '' !== $title ? trim( ( new HTML_To_Markdown_Converter() )->convert( $title ) ) : '';
+		$prefix         = '' !== $markdown_title ? "# $markdown_title\n\n" : '';
+
+		/**
+		 * Filters the Markdown placed after frontmatter and before post content.
+		 *
+		 * Return an empty string to omit the default title heading. Include any
+		 * desired spacing before the post content in the returned string.
+		 *
+		 * @param string   $prefix        Default title heading.
+		 * @param \WP_Post $post          Post being rendered.
+		 * @param string   $markdown_body Converted post content.
+		 */
+		$prefix = apply_filters( 'content_for_agents_markdown_prefix', $prefix, $post, $markdown_body );
+		return is_string( $prefix ) ? $prefix : '';
 	}
 
 	/**

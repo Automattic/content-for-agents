@@ -73,9 +73,13 @@ access rules change.
 See the [conversion architecture](ARCHITECTURE.md) for the order of block
 callbacks, HTML fallback, and response assembly.
 
-Output contains YAML frontmatter and converted content. The plugin adds a title
-heading only when the body has no H1; the stored title remains in frontmatter.
-Supported published HTML pages advertise their Markdown URL.
+Output contains YAML frontmatter, a default H1 from the WordPress post title,
+and converted content. The title remains in frontmatter. The Markdown prefix
+filter can change or omit the H1, or add content before the converted body.
+Frontmatter descriptions use the WordPress excerpt, then the first
+blank-line-delimited Markdown segment. Integrations can replace the description with
+`content_for_agents_frontmatter`. Supported published HTML pages advertise
+their Markdown URL.
 
 The converter handles quotes, citations, lists, tables, links, images,
 strikethrough, and code. Explicit `language-*` classes label fenced code.
@@ -95,8 +99,8 @@ cells, and at formatting or block ends. Inline code containing `<br>` uses HTML
 text. The converter also applies WordPress's same-site HTTP-to-HTTPS replacement.
 
 Classic Editor posts and freeform HTML mixed with blocks use the same HTML
-conversion path. Freeform content has no block name, so block metadata and
-block-level callbacks do not run for it. The plugin does not require the Block
+conversion path. Freeform content has no block name, so block-level callbacks
+do not run for it. The plugin does not require the Block
 Editor to be enabled.
 
 Core post-title and post-excerpt blocks use the current post context.
@@ -106,13 +110,13 @@ HTML around child blocks follows the same path. Rendered shortcode
 output is converted to Markdown; iframe players retain a link to the embedded
 media. An unregistered shortcode with a recognizable `url` attribute or
 positional URL becomes a link. Bracketed prose and shortcodes without a URL
-remain literal. Block metadata and registered block-level Markdown callbacks
-take precedence. Conversion does not run `the_content` over the entire post;
+remain literal. Registered block-level Markdown callbacks take precedence.
+Conversion does not run `the_content` over the entire post;
 other block render callbacks may still execute code.
 
 Conversion intentionally reads the stored `post_content` and walks its parsed
 block tree instead of applying WordPress's `the_content` filter. This preserves
-block metadata and the callback precedence described below, and avoids mixing
+the callback precedence described below and avoids mixing
 HTML presentation filters with Markdown authorization. Integrations should use
 `content_for_agents_pre_markdown` or `content_for_agents_after_markdown` for
 content transformations and `content_for_agents_can_serve_markdown` for access
@@ -125,8 +129,8 @@ All PHP classes live in `Content_For_Agents`. Public hooks, the
 Content-Signal option, and cache groups use `content_for_agents` or
 `content-for-agents` identifiers.
 
-Register a block callback before `init` priority 5. Integrations should register
-block types on `init`, after the plugin has installed its metadata filter:
+Register a block callback before `init` priority 5. Block types can be
+registered through WordPress independently of the Markdown callback:
 
 ```php
 add_action( 'content_for_agents_register_block_callbacks', static function () {
@@ -151,27 +155,23 @@ one.
 
 Callback Markdown is authoritative, including list markers and indentation.
 Callbacks for list items must return complete Markdown such as `- Item` or
-`1. Item`; the converter does not infer or prepend markers from `core/list`.
-An integration that needs ordered-list position or nesting can instead own the
-whole list with a `core/list` callback, which takes precedence over its children.
+`1. Item`; the converter does not infer or prepend list markers. A parent
+callback owns its entire subtree. It can select visible `innerBlocks` and pass
+them to `Markdown_Converter::blocks_to_markdown()` to invoke child callbacks;
+otherwise those callbacks do not run. Without a parent callback, the converter
+walks saved `innerContent` when descendants need their own Markdown strategy,
+including a child callback or `core/embed`. Each child callback can return `''`
+to hide that child.
 
-A block can alternatively declare metadata in `block.json`:
+Integrations must keep these choices consistent with rendered HTML. If a
+parent's WordPress renderer hides or rearranges children, give that parent a
+Markdown callback using the same visibility rule. A child callback alone
+cannot determine what an unrelated parent renderer will display.
 
-```json
-{
-  "contentForAgents": {
-    "callback": "Example\\Markdown::convert"
-  }
-}
-```
-
-The callable must be loaded before conversion. Metadata modes `strip` and
-`children-only` take precedence over metadata callbacks; metadata handling takes
-precedence over registry callbacks. A metadata callback's empty or `null`
-result also suppresses the block. An absent or non-callable metadata callback
-lets conversion continue. Registry output then passes through
-`content_for_agents_block_{block-name}`. That filter does not run for the
-metadata path. Preserve this distinction when adding integrations.
+Return `''` from a registered callback to omit a block and its children. To
+omit only the wrapper, return
+`( new Markdown_Converter() )->blocks_to_markdown( $block['innerBlocks'] ?? array(), $post )`.
+Registry output passes through `content_for_agents_block_{block-name}`.
 
 Public hooks:
 
@@ -182,38 +182,37 @@ Public hooks:
 - `content_for_agents_can_serve_markdown` receives the post and a `response` or
   `discovery` context. Return `false` to deny access; it cannot grant access.
 - `content_for_agents_can_cache_markdown` receives the post. Return `false` to
-  keep visitor-specific output out of the shared cache.
-- `content_for_agents_authors` receives the post. Return author entries with a
-  `name` and optional `job_title` and `link`.
-- `content_for_agents_frontmatter` receives the post. Return the metadata array.
+  keep visitor-specific output out of the shared cache. This is checked in
+  `Markdown_Access::can_cache()` before `Markdown_Response` reads or writes its
+  document cache.
+- `content_for_agents_frontmatter` receives the post. Return the metadata array;
+  replace its `authors` entry to provide custom bylines.
+- `content_for_agents_markdown_prefix` receives the default title H1, the post,
+  and the converted Markdown body. Return a Markdown string to place after
+  frontmatter and before the body. The body is converted first so the filter can
+  inspect it. Multiline output works; include the trailing blank line that
+  separates it from the body. Return `''` to omit the prefix.
 - `content_for_agents_content_signal_values` receives stored values or defaults.
-  Return site-wide values for Markdown headers and `robots.txt`.
+  `Markdown_Response::get_content_signal_header()` applies it when building
+  the Markdown response header and the `robots.txt` directive.
 - `content_for_agents_set_context` and `content_for_agents_clear_context` set
-  and clear a conversion context. Read it with
-  `Block_Markdown_Registry::get_context()` and clear it in `try/finally`.
+  and clear an optional conversion context for external integrations. The base
+  plugin does not set one. A block callback can read it with
+  `Block_Markdown_Registry::get_context()`. Clear it in `try/finally`.
 
 ### Common filter examples
 
-Replace the default author byline with provider-neutral post data, or add
-frontmatter fields:
+Replace the default author byline with provider-neutral post data and add a
+frontmatter field:
 
 ```php
 add_filter(
-	'content_for_agents_authors',
-	static function ( array $authors, \WP_Post $post ): array {
-		$credit = get_post_meta( $post->ID, 'article_credit', true );
-
-		return is_string( $credit ) && '' !== $credit
-			? array( array( 'name' => $credit ) )
-			: $authors;
-	},
-	10,
-	2
-);
-
-add_filter(
 	'content_for_agents_frontmatter',
 	static function ( array $data, \WP_Post $post ): array {
+		$credit = get_post_meta( $post->ID, 'article_credit', true );
+		if ( is_string( $credit ) && '' !== $credit ) {
+			$data['authors'] = array( array( 'name' => $credit ) );
+		}
 		$data['language'] = get_post_meta( $post->ID, 'language', true ) ?: 'en';
 		return $data;
 	},
@@ -221,6 +220,59 @@ add_filter(
 	2
 );
 ```
+
+The Markdown prefix defaults to the post title as an H1. These are independent
+examples of changing it:
+
+**Use a custom title** stored in `agent_heading`:
+
+```php
+add_filter(
+	'content_for_agents_markdown_prefix',
+	static function ( string $prefix, \WP_Post $post ): string {
+		$title = get_post_meta( $post->ID, 'agent_heading', true );
+		if ( ! is_string( $title ) || '' === trim( $title ) ) {
+			return $prefix;
+		}
+
+		$title = ( new \Content_For_Agents\HTML_To_Markdown_Converter() )->convert( $title );
+		return "# $title\n\n";
+	},
+	10,
+	2
+);
+```
+
+**Omit the title**:
+
+```php
+add_filter( 'content_for_agents_markdown_prefix', '__return_empty_string' );
+```
+
+**Add the WordPress excerpt** below the default title:
+
+```php
+add_filter(
+	'content_for_agents_markdown_prefix',
+	static function ( string $prefix, \WP_Post $post ): string {
+		$excerpt = get_the_excerpt( $post );
+		if ( '' === trim( $excerpt ) ) {
+			return $prefix;
+		}
+
+		$excerpt = ( new \Content_For_Agents\HTML_To_Markdown_Converter() )->convert( $excerpt );
+		return $prefix . $excerpt . "\n\n";
+	},
+	10,
+	2
+);
+```
+
+Use `$post->post_excerpt` instead of `get_the_excerpt( $post )` to include only
+a manually saved excerpt.
+
+See [Site integrations](INTEGRATIONS.md#seo-descriptions-in-frontmatter) for a
+Rank Math description example using the frontmatter filter.
 
 The plugin enables WordPress `post` and `page` by default. Other post types,
 including custom post types and attachments, need the `content-for-agents`
