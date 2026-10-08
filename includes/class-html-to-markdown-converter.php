@@ -102,6 +102,16 @@ final class HTML_To_Markdown_Converter {
 				continue;
 			}
 			$hidden = $is_tag && ! $is_closer ? $processor->get_attribute( 'hidden' ) : null;
+			// Interactivity bindings can reveal content after the initial render.
+			$static_hidden      = null !== $hidden && null === $processor->get_attribute( 'data-wp-bind--hidden' );
+			$static_aria_hidden = $is_tag && ! $is_closer
+				&& 'true' === strtolower( trim( $this->string_attribute( $processor, 'aria-hidden' ) ) )
+				&& null === $processor->get_attribute( 'data-wp-bind--aria-hidden' );
+			$decorative_video   = $is_tag && ! $is_closer && 'VIDEO' === $token_name
+				&& null !== $processor->get_attribute( 'autoplay' )
+				&& null !== $processor->get_attribute( 'muted' )
+				&& null !== $processor->get_attribute( 'loop' )
+				&& null === $processor->get_attribute( 'controls' );
 
 			if (
 				$is_tag
@@ -109,8 +119,9 @@ final class HTML_To_Markdown_Converter {
 				&& ! $is_closer
 				&& (
 					in_array( $token_name, array( 'SCRIPT', 'STYLE', 'DATALIST', 'OPTION', 'SELECT', 'SVG', 'TEMPLATE', 'TEXTAREA', 'TITLE' ), true )
-					|| null !== $hidden
-					|| 'true' === strtolower( trim( $this->string_attribute( $processor, 'aria-hidden' ) ) )
+					|| $static_hidden
+					|| $static_aria_hidden
+					|| $decorative_video
 					// Buttons are controls unless they carry a heading's text.
 					|| ( 'BUTTON' === $token_name && 0 === $heading_depth )
 				)

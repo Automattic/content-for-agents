@@ -1357,6 +1357,28 @@ HTML;
 	}
 
 	/**
+	 * Interactivity-bound hidden panes are available when readers switch tabs.
+	 */
+	public function test_interactivity_bound_hidden_panes_remain_in_markdown(): void {
+		$html     = '<div><p>First pane.</p><div hidden data-wp-bind--hidden="!context.isOpen"><h2>Other pane</h2><p>Alternative <a href="/more">details</a>.</p></div><div aria-hidden="true" data-wp-bind--aria-hidden="!context.isOpen"><p>ARIA pane.</p></div><p hidden>Not available.</p><p aria-hidden="true">Decoration.</p></div>';
+		$expected = "First pane.\n\n## Other pane\n\nAlternative [details](/more).\n\nARIA pane.";
+		$this->assertSame( $expected, ( new HTML_To_Markdown_Converter() )->convert( $html ) );
+		$this->assertSame( $expected, $this->convert_post_content( '<!-- wp:html -->' . $html . '<!-- /wp:html -->' ) );
+	}
+
+	/**
+	 * A looping muted video without playback controls is decorative background media.
+	 */
+	public function test_decorative_background_video_does_not_precede_content(): void {
+		$converter = new HTML_To_Markdown_Converter();
+		$this->assertSame(
+			'Visible text.',
+			$converter->convert( '<div><video autoplay muted loop playsinline src="/background.mp4"></video><p>Visible text.</p></div>' )
+		);
+		$this->assertSame( '[Video](/tour.mp4)', $converter->convert( '<video autoplay muted loop controls src="/tour.mp4"></video>' ) );
+	}
+
+	/**
 	 * Semantic block containers separate visible content without empty blocks.
 	 */
 	public function test_semantic_html_containers_keep_content_boundaries(): void {
