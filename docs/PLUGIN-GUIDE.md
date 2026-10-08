@@ -83,7 +83,8 @@ their Markdown URL.
 
 The converter handles quotes, citations, lists, tables, links, images,
 strikethrough, and code. Explicit `language-*` classes label fenced code.
-Audio, video, iframe sources, and lite YouTube embeds become links. Core embeds
+Audio, video, iframe sources, and lite YouTube embeds become links; muted,
+looping autoplay videos without controls are treated as decorative. Core embeds
 use a readable WordPress preview when available; otherwise their URL remains.
 Figures and captions stay inside their list item. Table captions become text
 beside the table. WordPress 7.0 accordion headings, math text, and visible
@@ -95,8 +96,10 @@ escape Markdown syntax; links inside inline code keep their styling and URLs.
 `<br>` becomes a hard break where possible and remains HTML in headings, table
 cells, and at formatting or block ends. Inline code containing `<br>` uses HTML
 `<code>`. Preformatted code uses fenced blocks. Content marked `hidden` or
-`aria-hidden="true"` is excluded. Links without a destination become plain
-text. The converter also applies WordPress's same-site HTTP-to-HTTPS replacement.
+`aria-hidden="true"` is excluded unless a WordPress Interactivity binding
+controls that attribute, as with alternate tab panes. Links without a
+destination become plain text. The converter also applies WordPress's
+same-site HTTP-to-HTTPS replacement.
 
 Classic Editor posts and freeform HTML mixed with blocks use the same HTML
 conversion path. Freeform content has no block name, so block-level callbacks
