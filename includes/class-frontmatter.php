@@ -57,7 +57,7 @@ class Frontmatter {
 	}
 
 	/**
-	 * Get description (excerpt or first paragraph of markdown).
+	 * Get description (excerpt or first blank-line-delimited Markdown segment).
 	 *
 	 * @param WP_Post $post    Post object.
 	 * @param string  $markdown Markdown body.

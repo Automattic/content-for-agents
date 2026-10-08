@@ -43,6 +43,13 @@ It processes each block in order:
 If a wrapper contains a descendant with its own Markdown strategy, the
 converter walks its `innerContent` fragments and child blocks in source order.
 This lets a child callback run without losing HTML owned by the wrapper.
+When a parent has a registered callback, that callback owns the subtree:
+it chooses whether to include children and can pass selected `innerBlocks` to
+`blocks_to_markdown()` to invoke their callbacks. Without a parent callback,
+descendant strategies drive the `innerContent` walk. Integrations must use
+visibility rules that agree with WordPress's HTML rendering; a parent renderer
+that independently hides children needs a corresponding parent Markdown
+callback.
 The converter joins the resulting Markdown fragments after each path completes.
 Callback output is not sent through HTML conversion.
 

@@ -55,16 +55,7 @@ class Markdown_Response {
 		$title     = trim( preg_replace( '/\s+/u', ' ', $title ) ?? $title );
 
 		if ( ! is_string( $content ) || '' === $content ) {
-			$converter   = new Markdown_Converter();
-			$frontmatter = new Frontmatter();
-
-			$markdown_body = $converter->post_to_markdown( $post );
-			$yaml          = $frontmatter->build( $post, $markdown_body );
-
-			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
-
-			// Build the prefix after conversion so its filter can inspect the final body.
-			$content = $yaml . self::get_markdown_prefix( $title, $post, $markdown_body ) . $markdown_body;
+			$content = self::build_content( $post, $title );
 
 			if ( $cacheable ) {
 				// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- CACHE_TTL is one hour.
@@ -86,6 +77,22 @@ class Markdown_Response {
 		// writing it so template rendering and later hooks cannot append output.
 		echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		exit;
+	}
+
+	/**
+	 * Build the uncached response, including frontmatter and filtered body.
+	 *
+	 * @param \WP_Post $post  Post being rendered.
+	 * @param string   $title Normalized WordPress post title.
+	 * @return string Complete Markdown document.
+	 */
+	private static function build_content( \WP_Post $post, string $title ): string {
+		$markdown_body = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$yaml          = ( new Frontmatter() )->build( $post, $markdown_body );
+		$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
+
+		// Build the prefix after conversion so its filter can inspect the final body.
+		return $yaml . self::get_markdown_prefix( $title, $post, $markdown_body ) . $markdown_body;
 	}
 
 	/**

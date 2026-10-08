@@ -50,6 +50,52 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Response filters receive the expected values and retain document order.
+	 */
+	public function test_response_filters_compose_frontmatter_prefix_and_body(): void {
+		$post        = self::factory()->post->create_and_get(
+			array(
+				'post_title'   => 'Response test',
+				'post_content' => '<!-- wp:paragraph --><p>Body text.</p><!-- /wp:paragraph -->',
+				'post_excerpt' => 'WordPress excerpt.',
+			)
+		);
+		$frontmatter = function ( array $data, \WP_Post $seen_post ) use ( $post ): array {
+			$this->assertSame( $post->ID, $seen_post->ID );
+			$this->assertSame( 'WordPress excerpt.', $data['description'] );
+			$data['description'] = 'SEO description';
+			return $data;
+		};
+		$after       = function ( string $body, \WP_Post $seen_post ) use ( $post ): string {
+			$this->assertSame( $post->ID, $seen_post->ID );
+			$this->assertSame( 'Body text.', $body );
+			return $body . "\n\nAfter marker.";
+		};
+		$prefix      = function ( string $default_prefix, \WP_Post $seen_post, string $body ) use ( $post ): string {
+			$this->assertSame( $post->ID, $seen_post->ID );
+			$this->assertSame( "# Response test\n\n", $default_prefix );
+			$this->assertSame( "Body text.\n\nAfter marker.", $body );
+			return "# Custom heading\n\nContext note.\n\n";
+		};
+
+		add_filter( 'content_for_agents_frontmatter', $frontmatter, 10, 2 );
+		add_filter( 'content_for_agents_after_markdown', $after, 10, 2 );
+		add_filter( 'content_for_agents_markdown_prefix', $prefix, 10, 3 );
+		try {
+			$method  = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$content = $method->invoke( null, $post, 'Response test' );
+		} finally {
+			remove_filter( 'content_for_agents_frontmatter', $frontmatter, 10 );
+			remove_filter( 'content_for_agents_after_markdown', $after, 10 );
+			remove_filter( 'content_for_agents_markdown_prefix', $prefix, 10 );
+		}
+
+		$this->assertStringContainsString( '"description": "SEO description"', $content );
+		$this->assertStringNotContainsString( 'WordPress excerpt.', $content );
+		$this->assertStringContainsString( "---\n\n# Custom heading\n\nContext note.\n\nBody text.\n\nAfter marker.", $content );
+	}
+
+	/**
 	 * The WordPress title is prefixed even when the body has its own H1.
 	 */
 	public function test_response_defaults_to_title_heading(): void {
@@ -108,6 +154,43 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Null continues conversion, while an empty pre-Markdown result suppresses it.
+	 */
+	public function test_pre_markdown_filter_distinguishes_null_and_empty_string(): void {
+		$post      = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:paragraph --><p>Body text.</p><!-- /wp:paragraph -->' )
+		);
+		$converter = new Markdown_Converter();
+		$default   = static fn(): ?string => null;
+		add_filter( 'content_for_agents_pre_markdown', $default );
+		try {
+			$this->assertSame( 'Body text.', $converter->post_to_markdown( $post ) );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $default );
+		}
+
+		$empty = function ( $value, \WP_Post $seen_post ) use ( $post ): string {
+			$this->assertNull( $value );
+			$this->assertSame( $post->ID, $seen_post->ID );
+			return '';
+		};
+		add_filter( 'content_for_agents_pre_markdown', $empty, 10, 2 );
+		try {
+			$this->assertSame( '', $converter->post_to_markdown( $post ) );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $empty, 10 );
+		}
+
+		$replace = static fn(): string => 'Provided body.';
+		add_filter( 'content_for_agents_pre_markdown', $replace );
+		try {
+			$this->assertSame( 'Provided body.', $converter->post_to_markdown( $post ) );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $replace );
+		}
+	}
+
+	/**
 	 * Registered block callbacks participate in post conversion.
 	 */
 	public function test_registered_block_callback_converts_post_content(): void {
@@ -121,6 +204,37 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( '**Hello agents**', $markdown );
+	}
+
+	/**
+	 * Per-block filters can replace or suppress registered callback output.
+	 */
+	public function test_registered_block_output_filter_can_replace_or_suppress_callback(): void {
+		$post      = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/test-block {"text":"Hello agents"} /-->' )
+		);
+		$hook      = 'content_for_agents_block_content-for-agents/test-block';
+		$converter = new Markdown_Converter();
+		$replace   = function ( string $markdown, array $block, \WP_Post $seen_post ) use ( $post ): string {
+			$this->assertSame( '**Hello agents**', $markdown );
+			$this->assertSame( 'Hello agents', $block['attrs']['text'] );
+			$this->assertSame( $post->ID, $seen_post->ID );
+			return 'Replaced output';
+		};
+		add_filter( $hook, $replace, 10, 3 );
+		try {
+			$this->assertSame( 'Replaced output', $converter->post_to_markdown( $post ) );
+		} finally {
+			remove_filter( $hook, $replace, 10 );
+		}
+
+		$suppress = static fn(): string => '';
+		add_filter( $hook, $suppress );
+		try {
+			$this->assertSame( '', $converter->post_to_markdown( $post ) );
+		} finally {
+			remove_filter( $hook, $suppress );
+		}
 	}
 
 	/**
@@ -267,6 +381,97 @@ HTML;
 		$this->assertSame( 'Parent registry callback', $this->convert_post_content( $content ) );
 		$this->assertSame( 1, $parent_executions );
 		$this->assertSame( 0, $child_executions );
+	}
+
+	/**
+	 * A parent callback uses its HTML visibility rule when deciding whether to visit children.
+	 */
+	public function test_parent_callback_visibility_matches_rendered_html(): void {
+		$visible          = static fn( array $attrs ): bool => ! empty( $attrs['showChild'] );
+		$child_executions = 0;
+		register_block_type(
+			'content-for-agents/visibility-parent',
+			array(
+				'attributes'      => array( 'showChild' => array( 'type' => 'boolean' ) ),
+				'render_callback' => static fn( array $attrs, string $content ): string => $visible( $attrs ) ? $content : '',
+			)
+		);
+		register_block_type(
+			'content-for-agents/visibility-child',
+			array( 'render_callback' => static fn(): string => '<p><strong>Visible child.</strong></p>' )
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/visibility-parent',
+			static function ( array $block, \WP_Post $post ) use ( $visible ): string {
+				return $visible( $block['attrs'] ?? array() )
+					? ( new Markdown_Converter() )->blocks_to_markdown( $block['innerBlocks'] ?? array(), $post )
+					: '';
+			}
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/visibility-child',
+			static function () use ( &$child_executions ): string {
+				++$child_executions;
+				return '**Visible child.**';
+			}
+		);
+
+		try {
+			foreach ( array( false, true ) as $show_child ) {
+				$content  = '<!-- wp:content-for-agents/visibility-parent {"showChild":' . ( $show_child ? 'true' : 'false' ) . '} -->'
+					. '<!-- wp:content-for-agents/visibility-child /-->'
+					. '<!-- /wp:content-for-agents/visibility-parent -->';
+				$block    = parse_blocks( $content )[0];
+				$rendered = ( new HTML_To_Markdown_Converter() )->convert( render_block( $block ) );
+				$markdown = $this->convert_post_content( $content );
+				$this->assertSame( $rendered, $markdown );
+				$this->assertSame( $show_child ? '**Visible child.**' : '', $markdown );
+			}
+			$this->assertSame( 1, $child_executions );
+		} finally {
+			unregister_block_type( 'content-for-agents/visibility-parent' );
+			unregister_block_type( 'content-for-agents/visibility-child' );
+		}
+	}
+
+	/**
+	 * Without a parent callback, children decide visibility in both HTML and Markdown.
+	 */
+	public function test_child_callback_visibility_matches_rendered_html(): void {
+		$visible          = static fn( array $attrs ): bool => ! empty( $attrs['visible'] );
+		$child_executions = 0;
+		register_block_type(
+			'content-for-agents/visibility-leaf',
+			array(
+				'attributes'      => array(
+					'visible' => array( 'type' => 'boolean' ),
+					'label'   => array( 'type' => 'string' ),
+				),
+				'render_callback' => static fn( array $attrs ): string => $visible( $attrs ) ? '<p>' . esc_html( $attrs['label'] ) . '</p>' : '',
+			)
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/visibility-leaf',
+			static function ( array $block ) use ( $visible, &$child_executions ): string {
+				++$child_executions;
+				return $visible( $block['attrs'] ?? array() ) ? $block['attrs']['label'] : '';
+			}
+		);
+
+		$content = <<<'HTML'
+<!-- wp:group -->
+<div class="wp-block-group"><!-- wp:content-for-agents/visibility-leaf {"visible":true,"label":"First child."} /--><!-- wp:content-for-agents/visibility-leaf {"visible":false,"label":"Hidden child."} /--><!-- wp:content-for-agents/visibility-leaf {"visible":true,"label":"Last child."} /--></div>
+<!-- /wp:group -->
+HTML;
+		try {
+			$rendered = ( new HTML_To_Markdown_Converter() )->convert( render_block( parse_blocks( $content )[0] ) );
+			$markdown = $this->convert_post_content( $content );
+			$this->assertSame( $rendered, $markdown );
+			$this->assertSame( "First child.\n\nLast child.", $markdown );
+			$this->assertSame( 3, $child_executions );
+		} finally {
+			unregister_block_type( 'content-for-agents/visibility-leaf' );
+		}
 	}
 
 	/**

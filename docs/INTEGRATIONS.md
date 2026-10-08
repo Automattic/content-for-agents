@@ -8,27 +8,20 @@ from both responses and per-page discovery. The filter cannot grant access.
 ## SEO descriptions in frontmatter
 
 The default frontmatter description comes from the WordPress excerpt, then the
-first Markdown paragraph. A site using Yoast SEO, Rank Math, or All in One SEO
-can replace it with that plugin's resolved post description. Put this in a site
-plugin or MU plugin. Keep only the branch for the SEO plugin that controls the
-site's HTML meta description if more than one is active.
+first blank-line-delimited Markdown segment. A site using Rank Math can replace it with Rank Math's
+resolved post description. Put this in a site plugin or MU plugin.
 
 ```php
 add_filter(
 	'content_for_agents_frontmatter',
 	static function ( array $data, WP_Post $post ): array {
-		$description = '';
-
-		if ( function_exists( 'YoastSEO' ) ) {
-			$meta        = YoastSEO()->meta->for_post( $post->ID );
-			$description = $meta ? $meta->description : '';
-		} elseif ( class_exists( '\RankMath\Paper\Singular' ) ) {
-			$paper = new \RankMath\Paper\Singular();
-			$paper->set_object( $post );
-			$description = $paper->description();
-		} elseif ( function_exists( 'aioseo' ) ) {
-			$description = aioseo()->meta->description->getPostDescription( $post );
+		if ( ! class_exists( '\RankMath\Paper\Singular' ) ) {
+			return $data;
 		}
+
+		$paper = new \RankMath\Paper\Singular();
+		$paper->set_object( $post );
+		$description = $paper->description();
 
 		if ( is_string( $description ) && '' !== trim( $description ) ) {
 			$data['description'] = html_entity_decode(
@@ -45,11 +38,12 @@ add_filter(
 );
 ```
 
-If the selected helper returns no description, leaving `$data` unchanged keeps
-the plugin's excerpt fallback. These helpers select the post explicitly, but
-generated templates can still use the current query. SEO filters can also
-change the final HTML meta tag. Compare both outputs when installing the
-integration.
+Rank Math's singular description uses the post's SEO description, excerpt, or
+post-type description template. If it returns no description, leaving `$data`
+unchanged keeps the plugin's fallback. The example selects the post explicitly,
+but template variables can still depend on the current query. Rank Math's
+`rank_math/frontend/description` filter can also change the final HTML meta tag.
+Compare both outputs when installing the integration.
 
 ## Redirected or removed canonical URLs
 

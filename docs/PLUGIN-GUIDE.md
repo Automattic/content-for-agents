@@ -76,8 +76,8 @@ callbacks, HTML fallback, and response assembly.
 Output contains YAML frontmatter, a default H1 from the WordPress post title,
 and converted content. The title remains in frontmatter. The Markdown prefix
 filter can change or omit the H1, or add content before the converted body.
-Frontmatter descriptions use the WordPress excerpt, then the first Markdown
-paragraph. Integrations can replace the description with
+Frontmatter descriptions use the WordPress excerpt, then the first
+blank-line-delimited Markdown segment. Integrations can replace the description with
 `content_for_agents_frontmatter`. Supported published HTML pages advertise
 their Markdown URL.
 
@@ -155,9 +155,18 @@ one.
 
 Callback Markdown is authoritative, including list markers and indentation.
 Callbacks for list items must return complete Markdown such as `- Item` or
-`1. Item`; the converter does not infer or prepend markers from `core/list`.
-An integration that needs ordered-list position or nesting can instead own the
-whole list with a `core/list` callback, which takes precedence over its children.
+`1. Item`; the converter does not infer or prepend list markers. A parent
+callback owns its entire subtree. It can select visible `innerBlocks` and pass
+them to `Markdown_Converter::blocks_to_markdown()` to invoke child callbacks;
+otherwise those callbacks do not run. Without a parent callback, the converter
+walks saved `innerContent` when descendants need their own Markdown strategy,
+including a child callback or `core/embed`. Each child callback can return `''`
+to hide that child.
+
+Integrations must keep these choices consistent with rendered HTML. If a
+parent's WordPress renderer hides or rearranges children, give that parent a
+Markdown callback using the same visibility rule. A child callback alone
+cannot determine what an unrelated parent renderer will display.
 
 Return `''` from a registered callback to omit a block and its children. To
 omit only the wrapper, return
@@ -262,8 +271,8 @@ add_filter(
 Use `$post->post_excerpt` instead of `get_the_excerpt( $post )` to include only
 a manually saved excerpt.
 
-See [Site integrations](INTEGRATIONS.md#seo-descriptions-in-frontmatter) for
-SEO description examples using the frontmatter filter.
+See [Site integrations](INTEGRATIONS.md#seo-descriptions-in-frontmatter) for a
+Rank Math description example using the frontmatter filter.
 
 The plugin enables WordPress `post` and `page` by default. Other post types,
 including custom post types and attachments, need the `content-for-agents`
