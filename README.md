@@ -24,6 +24,7 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
   password-protected content. Authenticated and password-authorized responses
   are never stored in the shared cache.
 - Purges affected Markdown URLs when content changes.
+- Records block callback coverage when supported posts are published or their coverage changes on VIP.
 - Publishes Content-Signal values in Markdown headers and `robots.txt`.
 - Exposes a public block callback registry and provider-neutral filters for
   integrations.
