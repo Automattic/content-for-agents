@@ -19,6 +19,8 @@ For a published post at `/example/`, the canonical Markdown URL is
 it is `?p=123&markdown=true`. Discovery links use the appropriate form. The
 static front page uses `/?markdown=true`; `/markdown` remains available as a
 normal page. Its old slug does not provide a hidden Markdown path.
+If another page's permalink resolves to the site root, no Markdown URL is
+advertised because that URL cannot identify the page.
 
 Unprotected published posts are public. For other statuses, WordPress must
 resolve a singular post and grant the visitor read permission.

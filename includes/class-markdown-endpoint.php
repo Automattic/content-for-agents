@@ -151,6 +151,7 @@ class Markdown_Endpoint {
 
 		$permalink = get_permalink( $post );
 		if ( ! is_string( $permalink ) || '' === $permalink
+			|| untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' ) )
 			|| wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
 			return '';
 		}
@@ -173,6 +174,12 @@ class Markdown_Endpoint {
 		}
 
 		$permalink = get_permalink( $post );
+		if ( ! self::is_static_front_page( $post )
+			&& is_string( $permalink )
+			&& untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' ) )
+		) {
+			return '';
+		}
 
 		return is_string( $permalink ) && '' !== $permalink
 			? add_query_arg( 'markdown', 'true', $permalink )
