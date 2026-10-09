@@ -589,6 +589,39 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * A page whose permalink points at the root must not advertise another page's endpoint.
+	 */
+	public function test_root_permalink_for_non_front_page_has_no_markdown_url(): void {
+		$this->configure_permalink_structure( '/%postname%/' );
+		$page_id = self::factory()->post->create(
+			array(
+				'post_name'   => 'courses',
+				'post_status' => 'publish',
+				'post_type'   => 'page',
+			)
+		);
+		$this->go_to( get_permalink( $page_id ) );
+
+		$root_permalink = static function ( $url, $post_id ) use ( $page_id ) {
+			return $page_id === (int) $post_id ? home_url( '/' ) : $url;
+		};
+		add_filter( 'page_link', $root_permalink, 10, 2 );
+
+		try {
+			$this->assertSame( '', Markdown_Endpoint::get_path_url( $page_id ) );
+			$this->assertSame( '', Markdown_Endpoint::get_query_url( $page_id ) );
+			$this->assertSame( '', Markdown_Endpoint::get_url( $page_id ) );
+
+			$discovery = new Discovery( new Loader() );
+			ob_start();
+			$discovery->add_markdown_alternate_link();
+			$this->assertSame( '', (string) ob_get_clean() );
+		} finally {
+			remove_filter( 'page_link', $root_permalink, 10 );
+		}
+	}
+
+	/**
 	 * Plain permalinks use the query endpoint as their public Markdown URL.
 	 */
 	public function test_get_url_returns_query_endpoint_for_plain_permalinks(): void {
