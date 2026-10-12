@@ -64,8 +64,8 @@ class Block_Markdown_Registry {
 	 * Register a markdown callback for a block type.
 	 *
 	 * @param string   $block_name Fully-qualified block name (e.g. 'my-plugin/chart').
-	 * @param callable $callback   fn(array $block, \WP_Post $post): string
-	 *                             Returns markdown string, or empty string to suppress the block.
+	 * @param callable $callback   fn(array $block, \WP_Post $post): string|\WP_Error|null
+	 *                             Returns Markdown, a failure, or a value that suppresses the block.
 	 */
 	public static function register( string $block_name, callable $callback ): void {
 		self::$callbacks[ $block_name ] = $callback;

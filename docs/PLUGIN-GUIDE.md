@@ -158,6 +158,22 @@ not a fallthrough signal. Registry methods `register()`, `get()`, and `has()`
 are public. A later registration for the same block name replaces the earlier
 one.
 
+If a registered callback or its block output filter throws or returns a value
+other than a string or `null`, the Markdown request returns HTTP 500. It does
+not serve or cache a partial document. The response contains a generic error;
+the server log records the site and post IDs, registered block name, error
+class and code, and any available code location without callback output or
+exception messages.
+Failures for the same post are logged at most once every five minutes. PHP
+warnings retain normal WordPress behavior. An empty string or `null` still
+intentionally suppresses a block. Direct calls to `post_to_markdown()` and
+`blocks_to_markdown()` return `WP_Error` on a block conversion failure. Callers
+must check for it before using the result as a string.
+Callbacks that delegate to `blocks_to_markdown()` should also return its
+`WP_Error` result when conversion fails.
+Exceptions during document assembly follow the same generic response and
+logging path.
+
 Callback Markdown is authoritative, including list markers and indentation.
 Callbacks for list items must return complete Markdown such as `- Item` or
 `1. Item`; the converter does not infer or prepend list markers. A parent
@@ -181,9 +197,10 @@ Registry output passes through `content_for_agents_block_{block-name}`.
 Public hooks:
 
 - `content_for_agents_pre_markdown` receives the post. Return `null` to continue
-  conversion, or a string to supply the body.
+  conversion, a string to supply the body, or `WP_Error` to stop conversion.
 - `content_for_agents_after_markdown` filters the body when serving a document.
-  Direct `post_to_markdown()` calls do not run it.
+  Return `WP_Error` to stop assembly of the document. Direct
+  `post_to_markdown()` calls do not run it.
 - `content_for_agents_can_serve_markdown` receives the post and a `response` or
   `discovery` context. Return `false` to deny access; it cannot grant access.
 - `content_for_agents_can_cache_markdown` receives the post. Return `false` to
@@ -196,7 +213,8 @@ Public hooks:
   and the converted Markdown body. Return a Markdown string to place after
   frontmatter and before the body. The body is converted first so the filter can
   inspect it. Multiline output works; include the trailing blank line that
-  separates it from the body. Return `''` to omit the prefix.
+  separates it from the body. Return `''` to omit the prefix, or `WP_Error` to
+  stop document assembly.
 - `content_for_agents_content_signal_values` receives stored values or defaults.
   `Markdown_Response::get_content_signal_header()` applies it when building
   the Markdown response header and the `robots.txt` directive.
@@ -297,21 +315,53 @@ An integration that owns the post type can instead include
 `content-for-agents` in its `register_post_type()` `supports` array.
 Provider-specific data, queries, and dependencies remain outside the base plugin.
 
-### Cache invalidation
+### Caching and invalidation
 
-When related data changes, integrations identify the affected article IDs and call:
+VIP's edge cache may serve a public Markdown URL without running WordPress. On
+an origin request, the plugin checks access before reading its WordPress object
+cache. For an anonymous request to a published, unprotected post, it reads the
+complete Markdown document from the `content_for_agents_doc` cache group. A
+miss builds the document and stores it for one hour. Logged-in, preview, and
+password-authorized requests bypass this shared document cache and receive
+private, no-store response headers. Integrations can also disable shared
+caching with `content_for_agents_can_cache_markdown`.
+
+`Markdown_Cache_Invalidator` deletes affected documents with `wp_cache_delete()`
+and queues their public URLs with
+`wpvip_purge_edge_cache_for_url()`. The URL list includes `/markdown` with and
+without a trailing slash where applicable, `?markdown=true`, and the base
+permalink because VIP purges its query-string variants. VIP also runs its
+[automatic post purge](https://docs.wpvip.com/caching/page-cache/purging/automatic-purging-for-wp/)
+on publication and post changes; the plugin adds Markdown URLs to that purge
+through `wpcom_vip_cache_purge_{$post_type}_post_urls`.
+
+| Change                                                           | Plugin action                                                                                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A supported post is saved or published                           | Clear the post and current parent's document caches and queue their current URLs. Autosaves and revisions are skipped.                                             |
+| A previously published, supported post is updated                | Queue its old URLs before the update, so a changed slug, status, or parent does not leave the former URL cached. The save also clears the current post and parent. |
+| A supported child moves to a new parent                          | Clear the former parent's document cache and queue its URLs, in addition to the current parent's purge on save.                                                    |
+| A post is trashed or permanently deleted                         | Clear the post and current parent's document caches and queue their URLs through the WordPress trash and pre-deletion hooks.                                       |
+| A category or tag is edited, or an author's display name changes | Find related published posts of supported types, then clear and queue purges for each post and its parent.                                                         |
+
+Related-post invalidation processes up to 100 posts immediately. If a full
+batch is found, it schedules the next batch with `wp_schedule_single_event()`;
+VIP Cron Control runs scheduled batches. `wp_next_scheduled()` avoids queuing
+the same batch twice.
+
+VIP queues and deduplicates URL purges and sends them on `shutdown`, so
+edge-cache refresh is not immediate.
+
+When integration-owned data changes outside these hooks, integrations identify
+the affected article IDs and call:
 
 ```php
 \Content_For_Agents\Markdown_Cache_Invalidator::invalidate_post( $article_id );
 ```
 
-The call clears the article and its parent, and purges their Markdown paths
-and query endpoints. Moving a child also clears its former parent. Category,
-tag, and author display-name changes clear affected documents in batches of
-100; WordPress schedules later batches through VIP Cron Control. VIP queues
-and deduplicates URL purges, so edge-cache refresh is not immediate. Call
-before permanent deletion if the old permalink must be purged. A callback
-that changes output does not automatically invalidate cached content.
+The call clears the article and its parent and queues their Markdown URLs.
+Call it before deletion when bypassing WordPress's normal deletion hooks, so
+the old permalink remains available. A callback that changes output does not
+automatically invalidate cached content.
 
 ## Metadata and Content-Signal contracts
 

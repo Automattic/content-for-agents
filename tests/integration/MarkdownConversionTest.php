@@ -96,6 +96,47 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Response filters can stop document assembly without losing their error.
+	 */
+	public function test_response_filter_errors_remain_available_for_logging(): void {
+		$post   = self::factory()->post->create_and_get();
+		$method = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+		$error  = new \WP_Error( 'integration_failed', 'Private diagnostic' );
+		$fail   = static fn(): \WP_Error => $error;
+
+		foreach ( array( 'content_for_agents_after_markdown', 'content_for_agents_markdown_prefix' ) as $hook ) {
+			add_filter( $hook, $fail );
+			try {
+				$this->assertSame( $error, $method->invoke( null, $post, 'Response test' ) );
+			} finally {
+				remove_filter( $hook, $fail );
+			}
+		}
+	}
+
+	/**
+	 * A thrown response filter failure becomes a WP_Error with its cause intact.
+	 */
+	public function test_response_exception_becomes_wp_error(): void {
+		$post      = self::factory()->post->create_and_get();
+		$exception = new \RuntimeException( 'Private diagnostic' );
+		$fail      = static function () use ( $exception ): void {
+			throw $exception;
+		};
+		add_filter( 'content_for_agents_after_markdown', $fail );
+		try {
+			$method = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$error  = $method->invoke( null, $post, 'Response test' );
+		} finally {
+			remove_filter( 'content_for_agents_after_markdown', $fail );
+		}
+
+		$this->assertWPError( $error );
+		$this->assertSame( 'content_for_agents_response_exception', $error->get_error_code() );
+		$this->assertSame( $exception, $error->get_error_data() );
+	}
+
+	/**
 	 * The WordPress title is prefixed even when the body has its own H1.
 	 */
 	public function test_response_defaults_to_title_heading(): void {
@@ -204,6 +245,124 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( '**Hello agents**', $markdown );
+	}
+
+	/**
+	 * A failed callback aborts conversion instead of returning a partial post.
+	 */
+	public function test_callback_exception_aborts_conversion(): void {
+		$block_name = 'content-for-agents/failing-callback';
+		Block_Markdown_Registry::register(
+			$block_name,
+			static function (): void {
+				throw new \RuntimeException( 'Sensitive callback detail' );
+			}
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/failing-callback /-->' )
+		);
+
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_callback_exception' );
+		$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+	}
+
+	/**
+	 * Invalid callback values abort conversion.
+	 */
+	public function test_invalid_callback_value_aborts_conversion(): void {
+		$block_name = 'content-for-agents/invalid-callback';
+		$post       = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/invalid-callback /-->' )
+		);
+
+		Block_Markdown_Registry::register( $block_name, static fn(): array => array( 'unexpected' ) );
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$this->assert_block_error( $error, $block_name, 'content_for_agents_invalid_callback_value' );
+
+		Block_Markdown_Registry::register( $block_name, static fn(): \WP_Error => new \WP_Error( 'conversion_failed' ) );
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$this->assert_block_error( $error, $block_name, 'conversion_failed' );
+	}
+
+	/**
+	 * A child error propagates through wrapper conversion without partial Markdown.
+	 */
+	public function test_child_error_propagates_through_wrapper(): void {
+		$block_name = 'content-for-agents/failing-child';
+		Block_Markdown_Registry::register( $block_name, static fn(): \WP_Error => new \WP_Error( 'child_failed' ) );
+		$post = self::factory()->post->create_and_get(
+			array(
+				'post_content' => '<!-- wp:group --><div class="wp-block-group">Before.<!-- wp:content-for-agents/failing-child /-->After.</div><!-- /wp:group -->',
+			)
+		);
+
+		$converter = new Markdown_Converter();
+		foreach ( array( $converter->blocks_to_markdown( parse_blocks( $post->post_content ), $post ), $converter->post_to_markdown( $post ) ) as $error ) {
+			$this->assert_block_error( $error, $block_name, 'child_failed' );
+		}
+	}
+
+	/**
+	 * A callback that delegates to child conversion returns the child's error.
+	 */
+	public function test_delegating_callback_preserves_child_error(): void {
+		$child_name = 'content-for-agents/failing-grandchild';
+		Block_Markdown_Registry::register( $child_name, static fn(): \WP_Error => new \WP_Error( 'child_failed' ) );
+		Block_Markdown_Registry::register(
+			'content-for-agents/delegating-parent',
+			static function ( array $block, \WP_Post $post ): string|\WP_Error {
+				return ( new Markdown_Converter() )->blocks_to_markdown( $block['innerBlocks'] ?? array(), $post );
+			}
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/delegating-parent --><section><!-- wp:content-for-agents/failing-grandchild /--></section><!-- /wp:content-for-agents/delegating-parent -->' )
+		);
+
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$this->assert_block_error( $error, $child_name, 'child_failed' );
+	}
+
+	/**
+	 * A failing block output filter aborts conversion with the block context.
+	 */
+	public function test_block_output_filter_failure_aborts_conversion(): void {
+		$block_name = 'content-for-agents/filter-failure';
+		$hook       = 'content_for_agents_block_' . $block_name;
+		$post       = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/filter-failure /-->' )
+		);
+		Block_Markdown_Registry::register( $block_name, static fn(): string => 'Valid callback output' );
+
+		$throwing_filter = static function (): void {
+			throw new \RuntimeException( 'Sensitive filter detail' );
+		};
+		add_filter( $hook, $throwing_filter );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_filter_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			remove_filter( $hook, $throwing_filter );
+		}
+
+		$invalid_filter = static fn(): array => array( 'unexpected' );
+		add_filter( $hook, $invalid_filter );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$this->assert_block_error( $error, $block_name, 'content_for_agents_invalid_filter_value' );
+		} finally {
+			remove_filter( $hook, $invalid_filter );
+		}
+
+		$error_filter = static fn(): \WP_Error => new \WP_Error( 'conversion_failed' );
+		add_filter( $hook, $error_filter );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$this->assert_block_error( $error, $block_name, 'conversion_failed' );
+		} finally {
+			remove_filter( $hook, $error_filter );
+		}
 	}
 
 	/**
@@ -1948,5 +2107,23 @@ MARKDOWN
 		);
 
 		return ( new Markdown_Converter() )->post_to_markdown( $post_id );
+	}
+
+	/**
+	 * Assert a block failure and return its WP_Error cause.
+	 *
+	 * @param mixed  $error      Converter result.
+	 * @param string $block_name Expected block name.
+	 * @param string $cause_code Expected cause code.
+	 * @return \WP_Error Cause of the block failure.
+	 */
+	private function assert_block_error( $error, string $block_name, string $cause_code ): \WP_Error {
+		$this->assertWPError( $error );
+		$this->assertSame( 'content_for_agents_block_conversion_failed', $error->get_error_code() );
+		$data = $error->get_error_data();
+		$this->assertSame( $block_name, $data['block_name'] );
+		$this->assertInstanceOf( \WP_Error::class, $data['cause'] );
+		$this->assertSame( $cause_code, $data['cause']->get_error_code() );
+		return $data['cause'];
 	}
 }
