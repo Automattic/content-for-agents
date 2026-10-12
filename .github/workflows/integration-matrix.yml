@@ -47,7 +47,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          npx wp-env start
+          npx wp-env start --config=.wp-env.test.json
           npm run test:integration
 
   result:

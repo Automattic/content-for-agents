@@ -33,7 +33,7 @@ composer check-platform-reqs
 composer phpcs
 composer test:unit
 npm run format:check
-npx wp-env start
+npx wp-env start --config=.wp-env.test.json
 npm run test:integration
 git diff --check
 ```

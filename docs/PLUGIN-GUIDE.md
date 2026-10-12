@@ -22,8 +22,10 @@ normal page. Its old slug does not provide a hidden Markdown path.
 If another page's permalink resolves to the site root, no Markdown URL is
 advertised because that URL cannot identify the page.
 
-Unprotected published posts are public. For other statuses, WordPress must
-resolve a singular post and grant the visitor read permission.
+Unprotected published posts of viewable post types are public. Opting a custom
+post type into Content for Agents does not override WordPress's
+`is_post_type_viewable()` check. For other statuses, WordPress must resolve a
+singular post and grant the visitor read permission.
 WordPress validates preview revisions and nonces before the plugin serves
 them; an authenticated `?p=ID` request may also resolve a readable draft.
 The plugin does not look up unresolved drafts, pending posts, scheduled posts,
@@ -38,7 +40,11 @@ matches the requested path. The access check still applies. Local development
 uses WordPress core URL lookup when VIP's API is unavailable.
 
 Third-party paywall and access-control integrations must veto Markdown access
-when the current visitor is not entitled to read a post. They must also disable
+when the current visitor is not entitled to read a post. The `/markdown` path
+runs before the normal page template, and the query endpoint runs early during
+`template_redirect`. A redirect or login screen on the HTML page does not by
+itself protect Markdown. Reuse the site's entitlement check in the filter below;
+replace the `example_` functions with the site's own functions. Also disable
 shared caching whenever entitlement depends on visitor-specific state such as a
 cookie:
 
@@ -68,7 +74,8 @@ add_filter(
 
 These filters can restrict access and caching, but cannot grant access that
 WordPress denies. Integrations must invalidate cached Markdown when their
-access rules change.
+access rules change. Test the HTML page and both Markdown URL forms as an
+entitled and an unentitled visitor, including after the cache has been warmed.
 
 ### Conversion
 

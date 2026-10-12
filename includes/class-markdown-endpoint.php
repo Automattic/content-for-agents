@@ -144,6 +144,7 @@ class Markdown_Endpoint {
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
 			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type )
 			|| self::is_static_front_page( $post )
 		) {
 			return '';
@@ -169,6 +170,7 @@ class Markdown_Endpoint {
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
 			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type )
 		) {
 			return '';
 		}
@@ -221,7 +223,8 @@ class Markdown_Endpoint {
 	 * @return bool Whether the post may be served.
 	 */
 	protected function can_serve( \WP_Post $post ): bool {
-		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type ) ) {
 			return false;
 		}
 
