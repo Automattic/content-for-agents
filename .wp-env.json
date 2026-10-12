@@ -8,11 +8,6 @@
   "core": "WordPress/WordPress#7.0-branch",
   "phpVersion": "8.2",
   "port": 8910,
-  "testsPort": 8911,
-  "plugins": ["."],
-  "env": {
-    "tests": {
-      "plugins": ["."]
-    }
-  }
+  "testsEnvironment": false,
+  "plugins": ["."]
 }

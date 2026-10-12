@@ -4,11 +4,11 @@
   "private": true,
   "license": "GPL-2.0-or-later",
   "scripts": {
-    "cmd:format": "prettier '**/*.{json,md,yml,yaml}' '.github/**/*.{yml,yaml}' '.wp-env.json'",
+    "cmd:format": "prettier '**/*.{json,md,yml,yaml}' '.github/**/*.{yml,yaml}' '.wp-env.json' '.wp-env.test.json'",
     "format": "npm run cmd:format -- --write",
     "format:check": "npm run cmd:format -- --check",
     "plugin-zip": "git archive --format=zip --output=content-for-agents.zip HEAD content-for-agents.php includes docs README.md LICENSE",
-    "test:integration": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c phpunit-integration.xml"
+    "test:integration": "wp-env run cli --config=.wp-env.test.json --env-cwd=\"wp-content/plugins/$(basename \"$(git rev-parse --show-toplevel)\")\" env WP_TESTS_DIR=/wordpress-phpunit ./vendor/bin/phpunit -c phpunit-integration.xml"
   },
   "devDependencies": {
     "@wordpress/env": "^11.17.0",
