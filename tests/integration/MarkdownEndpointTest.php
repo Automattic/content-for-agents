@@ -375,6 +375,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	 * Anonymous lookup cannot expose a published, non-public custom post type.
 	 */
 	public function test_anonymous_non_public_custom_post_type_is_unsupported(): void {
+		$this->configure_permalink_structure( '/%postname%/' );
 		register_post_type(
 			'cfa_internal',
 			array(
@@ -397,6 +398,9 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 
 			$this->assertFalse( is_singular() );
 			$this->assertNull( $this->endpoint->get_query_post_for_test() );
+			$this->assertFalse( $this->endpoint->can_serve_path_for_test( get_post( $post_id ) ) );
+			$this->assertSame( '', Markdown_Endpoint::get_path_url( $post_id ) );
+			$this->assertSame( '', Markdown_Endpoint::get_query_url( $post_id ) );
 		} finally {
 			unregister_post_type( 'cfa_internal' );
 		}

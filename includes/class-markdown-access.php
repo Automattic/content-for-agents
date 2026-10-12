@@ -29,14 +29,15 @@ final class Markdown_Access {
 	 * Whether Markdown may be served or advertised for a post.
 	 *
 	 * The filter can further restrict access, but cannot override the core post
-	 * status, capability, preview, password, or post-type-support checks.
+	 * status, capability, preview, password, or post-type-visibility checks.
 	 *
 	 * @param \WP_Post $post    Post being checked.
 	 * @param string   $context Access context.
 	 * @return bool Whether access is allowed.
 	 */
 	public static function can_serve( \WP_Post $post, string $context = self::CONTEXT_RESPONSE ): bool {
-		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type ) ) {
 			return false;
 		}
 
