@@ -73,6 +73,7 @@ The main responsibilities are divided as follows:
 | Plugin initialization and hooks | `Bootstrap`, `Loader`                                                            |
 | Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                         |
 | Block conversion                | `Markdown_Converter`, `Block_Markdown_Registry`                                  |
+| Conversion diagnostics          | `Markdown_Conversion_Logger`                                                     |
 | HTML conversion                 | `HTML_To_Markdown_Converter`, `Markdown_Inline_Buffer`, `Markdown_Output_Writer` |
 | Document metadata               | `Frontmatter`                                                                    |
 | Discovery                       | `Discovery`, `Robots_Txt`                                                        |
