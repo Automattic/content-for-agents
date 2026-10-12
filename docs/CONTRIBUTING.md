@@ -151,8 +151,9 @@ The base version appears in `package.json`, its lockfile, the plugin header, and
 `CONTENT_FOR_AGENTS_VERSION`. The **Create release PR** workflow updates these
 values. After that version change reaches `trunk`, the release workflow builds
 `content-for-agents.zip`, creates the matching `v{version}` tag, and publishes
-the ZIP. The `package.json` file list includes only runtime files and
-documentation; development files and provider-specific integrations are excluded.
+the ZIP. `npm run plugin-zip` archives the committed plugin code and docs from
+`HEAD`; uncommitted changes are not included. Development files, `package.json`,
+and provider-specific integrations are excluded.
 
 Integrations keep their dependencies, versioning, release process, and
 deployment separate from the base plugin.
