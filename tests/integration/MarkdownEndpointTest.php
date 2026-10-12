@@ -63,6 +63,27 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Invalid Markdown filter values return a generic uncached 500.
+	 */
+	public function test_invalid_markdown_filter_values_return_500_without_caching(): void {
+		$post    = self::factory()->post->create_and_get(
+			array(
+				'post_status'  => 'publish',
+				'post_content' => '<!-- wp:paragraph --><p>Body.</p><!-- /wp:paragraph -->',
+			)
+		);
+		$invalid = static fn(): array => array( 'unexpected' );
+		foreach ( array( 'content_for_agents_pre_markdown', 'content_for_agents_after_markdown', 'content_for_agents_markdown_prefix' ) as $hook ) {
+			add_filter( $hook, $invalid );
+			try {
+				$this->assert_500_without_cache( $post );
+			} finally {
+				remove_filter( $hook, $invalid );
+			}
+		}
+	}
+
+	/**
 	 * Verify a failed document is neither served nor saved to the shared cache.
 	 *
 	 * @param \WP_Post $post Post that will fail conversion.

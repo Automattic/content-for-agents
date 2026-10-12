@@ -8,11 +8,10 @@
 
 namespace Content_For_Agents;
 
-use Throwable;
 use WP_Error;
 
 /**
- * Logs conversion failures without content or exception messages.
+ * Logs the message for a conversion failure.
  */
 class Markdown_Conversion_Logger {
 	/**
@@ -34,35 +33,17 @@ class Markdown_Conversion_Logger {
 			return;
 		}
 
-		$block_name = 'unknown';
-		$cause      = $error;
-		if ( 'content_for_agents_block_conversion_failed' === $error->get_error_code() ) {
-			$context = $error->get_error_data();
-			if ( is_array( $context ) && ( $context['cause'] ?? null ) instanceof WP_Error ) {
-				$block_name = $context['block_name'] ?? 'unknown';
-				$cause      = $context['cause'];
-			}
-		}
-
-		$origin = $cause->get_error_data();
-		$source = $origin instanceof Throwable ? wp_normalize_path( $origin->getFile() ) : 'unknown';
-		$root   = trailingslashit( wp_normalize_path( ABSPATH ) );
-		$source = str_starts_with( $source, $root ) ? substr( $source, strlen( $root ) ) : basename( $source );
-		// WordPress applies this pattern when registering a block type.
-		$block_name = is_string( $block_name ) && preg_match( '/^[a-z0-9-]+\/[a-z0-9-]+$/', $block_name ) ? $block_name : 'unknown';
-		$error_code = sanitize_key( (string) $cause->get_error_code() );
-		$error_code = '' !== $error_code ? $error_code : 'unknown';
-
+		$data       = $error->get_error_data();
+		$block_name = is_array( $data ) && isset( $data['block_name'] ) ? $data['block_name'] : null;
+		$block      = is_string( $block_name ) ? '; block=' . $block_name : '';
+		$cause      = is_array( $data ) && isset( $data['cause'] ) && is_wp_error( $data['cause'] ) ? $data['cause'] : $error;
 		error_log( // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Production diagnostics for conversion failures.
 			sprintf(
-				'content-for-agents: Markdown conversion failed; site_id=%d; post_id=%d; block=%s; error=%s; code=%s; source=%s:%d',
+				'content-for-agents: Markdown conversion failed; site_id=%d; post_id=%d%s; message=%s',
 				$site_id,
 				$post_id,
-				$block_name,
-				$origin instanceof Throwable ? get_class( $origin ) : 'WP_Error',
-				$error_code,
-				$source,
-				$origin instanceof Throwable ? $origin->getLine() : 0
+				$block,
+				$cause->get_error_message()
 			)
 		);
 	}

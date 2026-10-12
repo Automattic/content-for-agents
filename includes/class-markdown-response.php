@@ -103,6 +103,9 @@ class Markdown_Response {
 			if ( is_wp_error( $markdown_body ) ) {
 				return $markdown_body;
 			}
+			if ( ! is_string( $markdown_body ) ) {
+				return new \WP_Error( 'content_for_agents_invalid_after_markdown_value', 'Markdown body filter returned a non-string value.' );
+			}
 
 			// Build the prefix after conversion so its filter can inspect the final body.
 			$prefix = self::get_markdown_prefix( $title, $post, $markdown_body );
@@ -138,7 +141,9 @@ class Markdown_Response {
 		 * @param string   $markdown_body Converted post content.
 		 */
 		$prefix = apply_filters( 'content_for_agents_markdown_prefix', $prefix, $post, $markdown_body );
-		return is_wp_error( $prefix ) || is_string( $prefix ) ? $prefix : '';
+		return is_wp_error( $prefix ) || is_string( $prefix )
+			? $prefix
+			: new \WP_Error( 'content_for_agents_invalid_prefix_value', 'Markdown prefix filter returned a non-string value.' );
 	}
 
 	/**

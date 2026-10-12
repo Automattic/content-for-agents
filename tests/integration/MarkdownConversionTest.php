@@ -115,6 +115,30 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Invalid response filter values fail instead of changing the document.
+	 */
+	public function test_invalid_response_filter_values_fail_conversion(): void {
+		$post    = self::factory()->post->create_and_get();
+		$method  = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+		$invalid = static fn(): array => array( 'unexpected' );
+		$hooks   = array(
+			'content_for_agents_after_markdown'  => 'content_for_agents_invalid_after_markdown_value',
+			'content_for_agents_markdown_prefix' => 'content_for_agents_invalid_prefix_value',
+		);
+
+		foreach ( $hooks as $hook => $code ) {
+			add_filter( $hook, $invalid );
+			try {
+				$error = $method->invoke( null, $post, 'Response test' );
+				$this->assertWPError( $error );
+				$this->assertSame( $code, $error->get_error_code() );
+			} finally {
+				remove_filter( $hook, $invalid );
+			}
+		}
+	}
+
+	/**
 	 * A thrown response filter failure becomes a WP_Error with its cause intact.
 	 */
 	public function test_response_exception_becomes_wp_error(): void {
@@ -232,6 +256,22 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Invalid pre-Markdown values fail instead of being cast to strings.
+	 */
+	public function test_invalid_pre_markdown_value_fails_conversion(): void {
+		$post    = self::factory()->post->create_and_get();
+		$invalid = static fn(): array => array( 'unexpected' );
+		add_filter( 'content_for_agents_pre_markdown', $invalid );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$this->assertWPError( $error );
+			$this->assertSame( 'content_for_agents_invalid_pre_markdown_value', $error->get_error_code() );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $invalid );
+		}
+	}
+
+	/**
 	 * Registered block callbacks participate in post conversion.
 	 */
 	public function test_registered_block_callback_converts_post_content(): void {
@@ -251,20 +291,103 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	 * A failed callback aborts conversion instead of returning a partial post.
 	 */
 	public function test_callback_exception_aborts_conversion(): void {
-		$block_name = 'content-for-agents/failing-callback';
+		$block_name  = 'content-for-agents/failing-callback';
+		$later_calls = 0;
 		Block_Markdown_Registry::register(
 			$block_name,
 			static function (): void {
 				throw new \RuntimeException( 'Sensitive callback detail' );
 			}
 		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/later-callback',
+			static function () use ( &$later_calls ): string {
+				++$later_calls;
+				return 'This block should not run.';
+			}
+		);
 		$post = self::factory()->post->create_and_get(
-			array( 'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/failing-callback /-->' )
+			array( 'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/failing-callback /--><!-- wp:content-for-agents/later-callback /-->' )
 		);
 
 		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
 		$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_callback_exception' );
 		$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		$this->assertSame( 0, $later_calls );
+	}
+
+	/**
+	 * A dynamic block render failure keeps the block name in the error.
+	 */
+	public function test_dynamic_block_render_exception_has_block_context(): void {
+		$block_name = 'content-for-agents/failing-render';
+		register_block_type(
+			$block_name,
+			array(
+				'render_callback' => static function (): void {
+					throw new \RuntimeException( 'Render failed.' );
+				},
+			)
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/failing-render /-->' )
+		);
+
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_block_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			unregister_block_type( $block_name );
+		}
+	}
+
+	/**
+	 * A shortcode exception keeps the enclosing block name.
+	 */
+	public function test_shortcode_exception_has_block_context(): void {
+		add_shortcode(
+			'cfa_failing_shortcode',
+			static function (): void {
+				throw new \RuntimeException( 'Shortcode failed.' );
+			}
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:shortcode -->[cfa_failing_shortcode]<!-- /wp:shortcode -->' )
+		);
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, 'core/shortcode', 'content_for_agents_block_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			remove_shortcode( 'cfa_failing_shortcode' );
+		}
+	}
+
+	/**
+	 * A native list item render failure keeps its block name during zipping.
+	 */
+	public function test_zipped_list_item_render_exception_has_block_context(): void {
+		Block_Markdown_Registry::register( 'content-for-agents/list-marker', static fn(): string => 'Custom item.' );
+		$post = self::factory()->post->create_and_get(
+			array(
+				'post_content' => '<!-- wp:list --><ul><!-- wp:list-item --><li>Fail here.</li><!-- /wp:list-item --><!-- wp:list-item --><li><!-- wp:content-for-agents/list-marker /--></li><!-- /wp:list-item --></ul><!-- /wp:list -->',
+			)
+		);
+		$fail = static function ( $pre_render, array $block ) {
+			if ( 'core/list-item' === ( $block['blockName'] ?? null ) && str_contains( $block['innerHTML'] ?? '', 'Fail here.' ) ) {
+				throw new \RuntimeException( 'List item render failed.' );
+			}
+			return $pre_render;
+		};
+		add_filter( 'pre_render_block', $fail, 10, 2 );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, 'core/list-item', 'content_for_agents_render_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			remove_filter( 'pre_render_block', $fail, 10 );
+		}
 	}
 
 	/**

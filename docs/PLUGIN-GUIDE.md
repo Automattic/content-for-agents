@@ -159,11 +159,13 @@ are public. A later registration for the same block name replaces the earlier
 one.
 
 If a registered callback or its block output filter throws or returns a value
-other than a string or `null`, the Markdown request returns HTTP 500. It does
-not serve or cache a partial document. The response contains a generic error;
-the server log records the site and post IDs, registered block name, error
-class and code, and any available code location without callback output or
-exception messages.
+other than a string or `null`, or if block rendering or shortcode conversion
+throws, the Markdown request returns HTTP 500. It does not serve or cache a partial
+document. The response contains a generic error;
+the server log identifies the site, post, and failing block when available,
+then records the first message from the underlying `WP_Error`. Error codes,
+additional messages, data, and exception traces are not logged. Conversion
+stops at the first failing block, so later blocks are not run on that request.
 Failures for the same post are logged at most once every five minutes. PHP
 warnings retain normal WordPress behavior. An empty string or `null` still
 intentionally suppresses a block. Direct calls to `post_to_markdown()` and
@@ -173,6 +175,8 @@ Callbacks that delegate to `blocks_to_markdown()` should also return its
 `WP_Error` result when conversion fails.
 Exceptions during document assembly follow the same generic response and
 logging path.
+The pre-Markdown, body, and prefix filters also fail conversion when they
+return a value outside their documented types.
 
 Callback Markdown is authoritative, including list markers and indentation.
 Callbacks for list items must return complete Markdown such as `- Item` or
@@ -199,7 +203,7 @@ Public hooks:
 - `content_for_agents_pre_markdown` receives the post. Return `null` to continue
   conversion, a string to supply the body, or `WP_Error` to stop conversion.
 - `content_for_agents_after_markdown` filters the body when serving a document.
-  Return `WP_Error` to stop assembly of the document. Direct
+  Return a string for the body or `WP_Error` to stop assembly. Direct
   `post_to_markdown()` calls do not run it.
 - `content_for_agents_can_serve_markdown` receives the post and a `response` or
   `discovery` context. Return `false` to deny access; it cannot grant access.
