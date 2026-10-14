@@ -23,6 +23,7 @@ class Markdown_Endpoint {
 	public function __construct( Loader $loader ) {
 		$loader->add_action( 'parse_request', $this, 'maybe_serve', 1 );
 		$loader->add_action( 'template_redirect', $this, 'maybe_serve_query', 1 );
+		$loader->add_filter( 'wp_headers', $this, 'add_accept_vary', PHP_INT_MAX );
 	}
 
 	/**
@@ -80,7 +81,7 @@ class Markdown_Endpoint {
 	}
 
 	/**
-	 * Serve a supported post requested with `?markdown=true`.
+	 * Serve a supported post requested with `?markdown=true` or an Accept header.
 	 *
 	 * WordPress resolves the singular post and preview state before this hook.
 	 */
@@ -249,7 +250,9 @@ class Markdown_Endpoint {
 	 * @return \WP_Post|null Resolved post, or null when the request is ineligible.
 	 */
 	protected function get_query_post(): ?\WP_Post {
-		if ( ! $this->request_wants_markdown_query() || ! is_singular() ) {
+		$query_requested = $this->request_wants_markdown_query();
+		// Feed and embed URLs keep their WordPress format unless the query requests Markdown.
+		if ( ! is_singular() || ( ! $query_requested && ( is_feed() || is_embed() || ! $this->request_wants_markdown_accept() ) ) ) {
 			return null;
 		}
 
@@ -257,8 +260,56 @@ class Markdown_Endpoint {
 		if ( ! $post instanceof \WP_Post || ! $this->can_serve_query( $post ) ) {
 			return null;
 		}
-
 		return $post;
+	}
+
+	/**
+	 * Select the supported Markdown representation from the Accept value.
+	 *
+	 * A case-sensitive substring match, including quoted parameters and quality
+	 * weights, keeps the response format consistent within shared cache variants.
+	 */
+	protected function request_wants_markdown_accept(): bool {
+		$method = strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Compared with a fixed method allowlist.
+		$accept = $_SERVER['HTTP_ACCEPT'] ?? ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Compared with a fixed supported string.
+		if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) || ! is_string( $accept ) ) {
+			return false;
+		}
+
+		return false !== strpos( $accept, 'text/markdown' );
+	}
+
+	/**
+	 * Tell caches that the normal URL can serve HTML or Markdown by Accept value.
+	 *
+	 * @param array $headers WordPress response headers.
+	 * @return array Response headers.
+	 */
+	public function add_accept_vary( array $headers ): array {
+		if ( ! is_singular() || is_feed() || is_embed() || $this->request_wants_markdown_query() ) {
+			return $headers;
+		}
+
+		$post = get_queried_object();
+		if ( ! $post instanceof \WP_Post || 'publish' !== $post->post_status || '' !== $post->post_password
+			|| ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
+			return $headers;
+		}
+
+		foreach ( $headers as $name => $value ) {
+			if ( 0 !== strcasecmp( (string) $name, 'Vary' ) ) {
+				continue;
+			}
+			$values = array_map( 'trim', explode( ',', (string) $value ) );
+			if ( in_array( '*', $values, true ) || in_array( 'accept', array_map( 'strtolower', $values ), true ) ) {
+				return $headers;
+			}
+			$headers[ $name ] = (string) $value . ', Accept';
+			return $headers;
+		}
+
+		$headers['Vary'] = 'Accept';
+		return $headers;
 	}
 
 	/**

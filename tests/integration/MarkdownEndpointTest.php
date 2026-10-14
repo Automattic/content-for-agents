@@ -267,6 +267,145 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Match the supported case-sensitive substring in Accept values.
+	 *
+	 * @dataProvider markdown_accept_provider
+	 *
+	 * @param string $accept   Accept header value.
+	 * @param string $method   HTTP method.
+	 * @param bool   $expected Whether Markdown should be served.
+	 */
+	public function test_markdown_accept_header( string $accept, string $method, bool $expected ): void {
+		$old_accept = $_SERVER['HTTP_ACCEPT'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Preserve test request state.
+		$old_method = $_SERVER['REQUEST_METHOD'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Preserve test request state.
+
+		$_SERVER['HTTP_ACCEPT']    = $accept;
+		$_SERVER['REQUEST_METHOD'] = $method;
+
+		try {
+			$this->assertSame( $expected, $this->endpoint->request_wants_markdown_accept_for_test() );
+		} finally {
+			$this->restore_server_value( 'HTTP_ACCEPT', $old_accept );
+			$this->restore_server_value( 'REQUEST_METHOD', $old_method );
+		}
+	}
+
+	/**
+	 * @return array<string, array{string, string, bool}>
+	 */
+	public function markdown_accept_provider(): array {
+		return array(
+			'explicit Markdown'       => array( 'text/markdown', 'GET', true ),
+			'mixed case media type'   => array( 'TeXt/MaRkDoWn', 'GET', false ),
+			'preferred Markdown'      => array( 'text/html;q=0.5, text/markdown;q=1', 'GET', true ),
+			'equal preference'        => array( 'text/html, text/markdown', 'GET', true ),
+			'HTML preferred'          => array( 'text/html, text/markdown;q=0.5', 'GET', true ),
+			'wildcard prefers HTML'   => array( 'text/markdown;q=0.5, */*;q=1', 'GET', true ),
+			'text range prefers HTML' => array( 'text/markdown;q=0.5, text/*;q=0.8', 'GET', true ),
+			'zero quality'            => array( 'text/markdown;q=0', 'GET', true ),
+			'zero quality with HTML'  => array( 'text/html, text/markdown;q=0', 'GET', true ),
+			'invalid preference'      => array( 'text/markdown;q=2', 'GET', true ),
+			'quoted comma'            => array( 'text/html;profile="a,text/markdown,b"', 'GET', true ),
+			'quoted semicolon'        => array( 'text/markdown;profile="a;q=0";q=0.7', 'GET', true ),
+			'wildcard'                => array( '*/*', 'GET', false ),
+			'text wildcard'           => array( 'text/*', 'GET', false ),
+			'HEAD request'            => array( 'text/markdown', 'HEAD', true ),
+			'POST request'            => array( 'text/markdown', 'POST', false ),
+		);
+	}
+
+	/**
+	 * The Accept route uses WordPress's resolved post, including the front page.
+	 */
+	public function test_accept_header_uses_singular_post_resolution(): void {
+		$page_id = self::factory()->post->create(
+			array(
+				'post_status' => 'publish',
+				'post_type'   => 'page',
+			)
+		);
+		update_option( 'show_on_front', 'page' );
+		update_option( 'page_on_front', $page_id );
+		$old_accept = $_SERVER['HTTP_ACCEPT'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Preserve test request state.
+
+		$_SERVER['HTTP_ACCEPT'] = 'text/markdown';
+		try {
+			$this->go_to( home_url( '/' ) );
+			$this->assertTrue( is_front_page() );
+			$this->assertSame( $page_id, $this->endpoint->get_query_post_for_test()->ID );
+
+			$this->go_to( home_url( '/?s=missing' ) );
+			$this->assertNull( $this->endpoint->get_query_post_for_test() );
+		} finally {
+			$this->restore_server_value( 'HTTP_ACCEPT', $old_accept );
+		}
+	}
+
+	/**
+	 * Header negotiation cannot bypass an integration's access veto.
+	 */
+	public function test_accept_header_respects_markdown_access_filter(): void {
+		$post_id    = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$old_accept = $_SERVER['HTTP_ACCEPT'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Preserve test request state.
+		$deny       = static fn(): bool => false;
+		$die        = function () {
+			return function ( $message, $title, $args ): void {
+				$this->assertSame( 404, $args['response'] );
+				throw new \RuntimeException( 'Expected access denial' );
+			};
+		};
+
+		$_SERVER['HTTP_ACCEPT'] = 'text/markdown';
+		add_filter( 'content_for_agents_can_serve_markdown', $deny );
+		add_filter( 'wp_die_handler', $die );
+		$this->go_to( get_permalink( $post_id ) );
+
+		try {
+			$this->endpoint->maybe_serve_query();
+			$this->fail( 'Expected access denial.' );
+		} catch ( \RuntimeException $error ) {
+			$this->assertSame( 'Expected access denial', $error->getMessage() );
+		} finally {
+			remove_filter( 'wp_die_handler', $die );
+			remove_filter( 'content_for_agents_can_serve_markdown', $deny );
+			$this->restore_server_value( 'HTTP_ACCEPT', $old_accept );
+		}
+	}
+
+	/**
+	 * Eligible HTML responses vary by Accept without dropping existing variants.
+	 */
+	public function test_accept_vary_is_added_to_singular_responses(): void {
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$this->go_to( get_permalink( $post_id ) );
+
+		$this->assertSame( array( 'Vary' => 'Accept' ), $this->endpoint->add_accept_vary( array() ) );
+		$this->assertSame(
+			array( 'Vary' => 'Accept-Encoding, Accept' ),
+			$this->endpoint->add_accept_vary( array( 'Vary' => 'Accept-Encoding' ) )
+		);
+		$this->assertSame(
+			array( 'vary' => 'ACCEPT, Accept-Encoding' ),
+			$this->endpoint->add_accept_vary( array( 'vary' => 'ACCEPT, Accept-Encoding' ) )
+		);
+
+		$_GET['markdown'] = 'true';
+		$this->assertSame( array(), $this->endpoint->add_accept_vary( array() ) );
+		unset( $_GET['markdown'] );
+		$this->go_to( home_url( '/?s=missing' ) );
+		$this->assertSame( array(), $this->endpoint->add_accept_vary( array() ) );
+	}
+
+	/** Restore an HTTP server variable after a request test. */
+	private function restore_server_value( string $key, ?string $value ): void {
+		if ( null === $value ) {
+			unset( $_SERVER[ $key ] );
+		} else {
+			$_SERVER[ $key ] = $value;
+		}
+	}
+
+	/**
 	 * Protected editorial statuses remain eligible after WordPress resolves them.
 	 *
 	 * @dataProvider protected_status_provider

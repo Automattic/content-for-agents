@@ -124,3 +124,9 @@ only when shared caching is allowed.
 
 Direct calls to `post_to_markdown()` return the body. They do not build
 frontmatter or run `content_for_agents_after_markdown`.
+
+At a post's normal URL, the plugin selects Markdown when the Accept value
+contains the lowercase `text/markdown` string. This also matches `q=0` and
+quoted parameters, but not mixed-case media types. The choice differs from
+normal HTTP content negotiation so each shared cache variant has a consistent
+response format on the supported hosting platform.

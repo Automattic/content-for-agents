@@ -56,7 +56,8 @@ content-for-agents.php
   -> plugins_loaded: Bootstrap creates and registers the modules
   -> init: supported post types and block callbacks are registered
   -> parse_request: /markdown requests are handled
-  -> template_redirect: the markdown=true query endpoint is handled
+  -> wp_headers: eligible HTML pages add Vary: Accept
+  -> template_redirect: markdown=true and Accept requests are handled
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
@@ -87,8 +88,12 @@ callback precedence, options, metadata, or cache behavior.
 The `/markdown` endpoint uses WordPress's normalized path during
 `parse_request`. It does not use stored rewrite rules or activation hooks;
 VIP application loaders may not run activation hooks. The `markdown=true`
-endpoint runs during `template_redirect`, after WordPress resolves the post.
-It does not look up unresolved post IDs.
+endpoint and `Accept: text/markdown` negotiation run during
+`template_redirect`, after WordPress resolves the post. Neither looks up
+unresolved post IDs. The plugin selects Markdown when the Accept value
+contains the lowercase `text/markdown` string, including in `q=0` or quoted
+parameters. Keep this behavior consistent with shared cache variants on the
+supported hosting platform.
 
 ## Choose the right test layer
 

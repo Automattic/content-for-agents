@@ -5,8 +5,9 @@
 # Content for Agents
 
 Content for Agents publishes WordPress posts and pages as Markdown. It serves
-`{permalink}/markdown` and `?markdown=true` URLs and advertises the Markdown
-version on each supported HTML page. It requires WordPress 7.0 or newer, PHP
+`{permalink}/markdown` and `?markdown=true` URLs, or responds to an explicit
+`Accept: text/markdown` request at the post's normal URL. It advertises the
+Markdown version on each supported HTML page. It requires WordPress 7.0 or newer, PHP
 8.2 or newer, and the WordPress VIP platform. On an unsupported runtime, the
 plugin does not load and shows an administrator notice.
 
@@ -16,7 +17,10 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
 ## Features
 
 - Serves posts and pages as Markdown with YAML frontmatter through
-  `{permalink}/markdown` or `?markdown=true`.
+  `{permalink}/markdown`, `?markdown=true`, or `Accept: text/markdown` at the
+  normal URL.
+- Recognizes the lowercase `text/markdown` text in Accept values. See the
+  [plugin guide](docs/PLUGIN-GUIDE.md) for matching details.
 - Converts nested Block Editor blocks, Classic Editor HTML, and posts that mix
   blocks with freeform HTML to readable Markdown.
 - Advertises Markdown alternatives on supported HTML pages.

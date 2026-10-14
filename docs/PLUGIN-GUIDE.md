@@ -22,6 +22,19 @@ normal page. Its old slug does not provide a hidden Markdown path.
 If another page's permalink resolves to the site root, no Markdown URL is
 advertised because that URL cannot identify the page.
 
+Clients can also request Markdown from a post's normal URL with
+`Accept: text/markdown`. Header names are case insensitive. For the value, the
+plugin supports a case-sensitive match for lowercase `text/markdown` anywhere
+in the header. This means `text/markdown;q=0` and a quoted parameter containing
+`text/markdown` select Markdown, while `TeXt/MaRkDoWn` does not. Other media
+types and quality values do not affect this choice. This differs from normal
+HTTP content negotiation to keep responses consistent within shared cache
+variants on the supported hosting platform. A wildcard alone does not select
+Markdown. Only GET and HEAD requests use this route.
+HTML and Markdown responses at the normal URL vary by `Accept` in the page
+cache. The explicit Markdown URLs remain available and take precedence over
+the header.
+
 Unprotected published posts are public. For other statuses, WordPress must
 resolve a singular post and grant the visitor read permission.
 WordPress validates preview revisions and nonces before the plugin serves
@@ -40,7 +53,7 @@ uses WordPress core URL lookup when VIP's API is unavailable.
 Third-party paywall and access-control integrations must veto Markdown access
 when the current visitor is not entitled to read a post. They must also disable
 shared caching whenever entitlement depends on visitor-specific state such as a
-cookie:
+cookie. This applies equally to the `Accept` route:
 
 ```php
 add_filter(
