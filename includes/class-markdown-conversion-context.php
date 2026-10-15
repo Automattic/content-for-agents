@@ -13,7 +13,6 @@ namespace Content_For_Agents;
 final class Markdown_Conversion_Context {
 	public string $output                         = '';
 	public bool $at_line_start                    = true;
-	public bool $in_pre                           = false;
 	public ?string $pre_code                      = null;
 	public ?string $pre_language                  = null;
 	public ?Markdown_Inline_Buffer $inline_buffer = null;

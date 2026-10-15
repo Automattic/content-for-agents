@@ -51,8 +51,7 @@ class Markdown_Response {
 		$cacheable = Markdown_Access::can_cache( $post );
 		$cache_key = 'markdown_' . $post->ID;
 		$content   = $cacheable ? wp_cache_get( $cache_key, self::CACHE_GROUP ) : false;
-		$title     = html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
-		$title     = trim( preg_replace( '/\s+/u', ' ', $title ) ?? $title );
+		$title     = self::get_response_title( $post );
 
 		if ( ! is_string( $content ) || '' === $content ) {
 			$content = self::build_content( $post, $title );
@@ -86,6 +85,22 @@ class Markdown_Response {
 	}
 
 	/**
+	 * Read the filtered title with the requested post in WordPress globals.
+	 *
+	 * @param \WP_Post $post Post being rendered.
+	 * @return string Normalized post title.
+	 */
+	private static function get_response_title( \WP_Post $post ): string {
+		$context = new Post_Context( $post );
+		try {
+			$title = html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			return trim( preg_replace( '/\s+/u', ' ', $title ) ?? $title );
+		} finally {
+			$context->restore();
+		}
+	}
+
+	/**
 	 * Build the uncached response, including frontmatter and filtered body.
 	 *
 	 * @param \WP_Post $post  Post being rendered.
@@ -93,11 +108,15 @@ class Markdown_Response {
 	 * @return string|\WP_Error Complete Markdown document or a conversion failure.
 	 */
 	private static function build_content( \WP_Post $post, string $title ): string|\WP_Error {
+		$context = null;
 		try {
 			$markdown_body = ( new Markdown_Converter() )->post_to_markdown( $post );
 			if ( is_wp_error( $markdown_body ) ) {
 				return $markdown_body;
 			}
+
+			// Conversion restores its context; response filters still need this post.
+			$context       = new Post_Context( $post );
 			$yaml          = ( new Frontmatter() )->build( $post, $markdown_body );
 			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
 			if ( is_wp_error( $markdown_body ) ) {
@@ -115,6 +134,8 @@ class Markdown_Response {
 			return $yaml . $prefix . $markdown_body;
 		} catch ( \Throwable $error ) {
 			return new \WP_Error( 'content_for_agents_response_exception', 'Markdown document assembly failed.', $error );
+		} finally {
+			$context?->restore();
 		}
 	}
 

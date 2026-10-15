@@ -12,11 +12,39 @@ use Content_For_Agents\Block_Markdown_Registry;
 use Content_For_Agents\HTML_To_Markdown_Converter;
 use Content_For_Agents\Markdown_Converter;
 use Content_For_Agents\Markdown_Response;
+use Content_For_Agents\Post_Context;
 
 /**
  * Exercises Markdown conversion in WordPress.
  */
 class MarkdownConversionTest extends \WP_UnitTestCase {
+	/**
+	 * A failing post setup does not leave the requested post in template globals.
+	 */
+	public function test_post_context_restores_globals_when_setup_fails(): void {
+		$target = self::factory()->post->create_and_get();
+		$other  = self::factory()->post->create_and_get();
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$fail          = static function (): void {
+			throw new \RuntimeException( 'Post setup failed' );
+		};
+		add_action( 'the_post', $fail );
+		try {
+			try {
+				new Post_Context( $target );
+				$this->fail( 'Expected post setup to fail.' );
+			} catch ( \RuntimeException $error ) {
+				$this->assertSame( 'Post setup failed', $error->getMessage() );
+			}
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_action( 'the_post', $fail );
+			$post = $previous_post;
+		}
+	}
+
 	/**
 	 * The default title prefix can be replaced or removed by an integration.
 	 */
@@ -93,6 +121,132 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 		$this->assertStringContainsString( '"description": "SEO description"', $content );
 		$this->assertStringNotContainsString( 'WordPress excerpt.', $content );
 		$this->assertStringContainsString( "---\n\n# Custom heading\n\nContext note.\n\nBody text.\n\nAfter marker.", $content );
+	}
+
+	/**
+	 * Excerpt filters see the response post even when another loop changed globals.
+	 */
+	public function test_frontmatter_excerpt_uses_response_post_context(): void {
+		$target = self::factory()->post->create_and_get(
+			array(
+				'post_title'   => 'Target',
+				'post_content' => '<!-- wp:paragraph --><p>Target body.</p><!-- /wp:paragraph -->',
+			)
+		);
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other' ) );
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$excerpt       = static function (): string {
+			global $post;
+			return $post->post_title . ' excerpt';
+		};
+		add_filter( 'get_the_excerpt', $excerpt );
+		try {
+			$method = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$output = $method->invoke( null, $target, 'Target' );
+			$this->assertStringContainsString( '"description": "Target excerpt"', $output );
+			$this->assertSame( $other, $post );
+
+			$fail = static function (): void {
+				throw new \RuntimeException( 'Frontmatter filter failed' );
+			};
+			add_filter( 'content_for_agents_frontmatter', $fail );
+			try {
+				$this->assertWPError( $method->invoke( null, $target, 'Target' ) );
+				$this->assertSame( $other, $post );
+			} finally {
+				remove_filter( 'content_for_agents_frontmatter', $fail );
+			}
+		} finally {
+			remove_filter( 'get_the_excerpt', $excerpt );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * Title filters see the requested post even when another loop changed globals.
+	 */
+	public function test_response_title_uses_requested_post_context(): void {
+		$target = self::factory()->post->create_and_get( array( 'post_title' => 'Target title' ) );
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other title' ) );
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$title_filter  = static function (): string {
+			global $post;
+			return $post->post_title;
+		};
+		add_filter( 'the_title', $title_filter );
+		try {
+			$method = new \ReflectionMethod( Markdown_Response::class, 'get_response_title' );
+			$this->assertSame( 'Target title', $method->invoke( null, $target ) );
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_filter( 'the_title', $title_filter );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * A title filter changing the global post cannot affect later frontmatter.
+	 */
+	public function test_title_filter_does_not_pollute_frontmatter_context(): void {
+		$target = self::factory()->post->create_and_get( array( 'post_title' => 'Target title' ) );
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other title' ) );
+		global $post;
+		$previous_post  = $post;
+		$post           = $other;
+		$first_title    = true;
+		$title_filter   = static function ( string $title ) use ( $other, &$first_title ): string {
+			if ( $first_title ) {
+				global $post;
+				$post        = $other;
+				$first_title = false;
+			}
+			return $title;
+		};
+		$excerpt_filter = static function (): string {
+			global $post;
+			return $post->post_title;
+		};
+		add_filter( 'the_title', $title_filter );
+		add_filter( 'get_the_excerpt', $excerpt_filter );
+		try {
+			$title_method = new \ReflectionMethod( Markdown_Response::class, 'get_response_title' );
+			$body_method  = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$title        = $title_method->invoke( null, $target );
+			$body         = $body_method->invoke( null, $target, $title );
+			$this->assertStringContainsString( '"description": "Target title"', $body );
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_filter( 'the_title', $title_filter );
+			remove_filter( 'get_the_excerpt', $excerpt_filter );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * The pre-Markdown callback also sees the post passed to the converter.
+	 */
+	public function test_pre_markdown_filter_uses_conversion_post_context(): void {
+		$target = self::factory()->post->create_and_get( array( 'post_title' => 'Target' ) );
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other' ) );
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$pre           = static function (): string {
+			global $post;
+			return $post->post_title;
+		};
+		add_filter( 'content_for_agents_pre_markdown', $pre );
+		try {
+			$this->assertSame( 'Target', ( new Markdown_Converter() )->post_to_markdown( $target ) );
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $pre );
+			$post = $previous_post;
+		}
 	}
 
 	/**

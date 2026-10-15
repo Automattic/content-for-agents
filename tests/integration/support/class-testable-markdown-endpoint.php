@@ -55,6 +55,13 @@ class Testable_Markdown_Endpoint extends Markdown_Endpoint {
 	}
 
 	/**
+	 * Expose Accept-header negotiation.
+	 */
+	public function request_wants_markdown_accept_for_test(): bool {
+		return $this->request_wants_markdown_accept();
+	}
+
+	/**
 	 * Expose query post resolution.
 	 *
 	 * @return \WP_Post|null

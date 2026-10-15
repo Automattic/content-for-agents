@@ -65,7 +65,7 @@ class Markdown_Cache_Invalidator {
 	 * @return string[]
 	 */
 	private static function get_purge_urls( int $post_id ): array {
-		$endpoint_url = Markdown_Endpoint::get_path_url( $post_id );
+		$endpoint_url = Markdown_Endpoint::get_path_url_for_purge( $post_id );
 		$query_url    = Markdown_Endpoint::get_query_url( $post_id );
 		$urls         = array();
 

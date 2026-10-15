@@ -19,8 +19,23 @@ For a published post at `/example/`, the canonical Markdown URL is
 it is `?p=123&markdown=true`. Discovery links use the appropriate form. The
 static front page uses `/?markdown=true`; `/markdown` remains available as a
 normal page. Its old slug does not provide a hidden Markdown path.
+If a child page occupies a post's `/markdown` path, the child keeps that URL
+and the parent uses `?markdown=true`. Discovery links use the query URL.
 If another page's permalink resolves to the site root, no Markdown URL is
 advertised because that URL cannot identify the page.
+
+Clients can also request Markdown from a post's normal URL with
+`Accept: text/markdown`. Header names are case insensitive. For the value, the
+plugin supports a case-sensitive match for lowercase `text/markdown` anywhere
+in the header. This means `text/markdown;q=0` and a quoted parameter containing
+`text/markdown` select Markdown, while `TeXt/MaRkDoWn` does not. Other media
+types and quality values do not affect this choice. This differs from normal
+HTTP content negotiation to keep responses consistent within shared cache
+variants on the supported hosting platform. A wildcard alone does not select
+Markdown. Only GET and HEAD requests use this route.
+HTML and Markdown responses at the normal URL vary by `Accept` in the page
+cache. The explicit Markdown URLs remain available and take precedence over
+the header.
 
 Unprotected published posts of viewable post types are public. Opting a custom
 post type into Content for Agents does not override WordPress's
@@ -28,6 +43,8 @@ post type into Content for Agents does not override WordPress's
 singular post and grant the visitor read permission.
 WordPress validates preview revisions and nonces before the plugin serves
 them; an authenticated `?p=ID` request may also resolve a readable draft.
+The query and Accept routes use the post selected by WordPress's original main
+query. They do not use the mutable global post to identify the request.
 The plugin does not look up unresolved drafts, pending posts, scheduled posts,
 or custom statuses by ID. Trash, auto-drafts, revisions, and other internal
 statuses are never served. Password-protected content requires the password
@@ -46,7 +63,7 @@ runs before the normal page template, and the query endpoint runs early during
 itself protect Markdown. Reuse the site's entitlement check in the filter below;
 replace the `example_` functions with the site's own functions. Also disable
 shared caching whenever entitlement depends on visitor-specific state such as a
-cookie:
+cookie. This applies equally to the `Accept` route:
 
 ```php
 add_filter(
@@ -74,8 +91,9 @@ add_filter(
 
 These filters can restrict access and caching, but cannot grant access that
 WordPress denies. Integrations must invalidate cached Markdown when their
-access rules change. Test the HTML page and both Markdown URL forms as an
-entitled and an unentitled visitor, including after the cache has been warmed.
+access rules change. Test the HTML page, both Markdown URL forms, and the
+Accept route as an entitled and an unentitled visitor, including after the
+cache has been warmed.
 
 ### Conversion
 

@@ -36,7 +36,7 @@ final class Markdown_Inline_Buffer {
 	}
 
 	/** Add one inline tag from the caller's HTML processor. */
-	public function append_tag( WP_HTML_Tag_Processor $processor, string $tag, bool $is_closer, bool $literal_break = false ): bool {
+	public function append_tag( WP_HTML_Tag_Processor $processor, string $tag, bool $is_closer, bool $literal_break = false ): void {
 		$type = match ( $tag ) {
 				'B', 'STRONG'       => 'strong',
 				'I', 'EM'           => 'em',
@@ -49,7 +49,7 @@ final class Markdown_Inline_Buffer {
 				default            => null,
 		};
 		if ( null === $type ) {
-			return false;
+			return;
 		}
 		$attributes = array( 'tag' => $tag );
 		if ( 'break' === $type ) {
@@ -71,7 +71,7 @@ final class Markdown_Inline_Buffer {
 				}
 			}
 			if ( null === $match ) {
-				return true;
+				return;
 			}
 			// Reopen overlapping ranges after the matching close. HTML markers keep the split effects unambiguous in Markdown.
 			$matching_index = $this->open[ $match ];
@@ -109,10 +109,9 @@ final class Markdown_Inline_Buffer {
 					)
 				);
 			}
-			return true;
+			return;
 		}
 		$this->add_event( $type, true, $attributes );
-		return true;
 	}
 
 	/** Figure captions use the same format boundaries as inline emphasis. */
@@ -331,9 +330,6 @@ final class Markdown_Inline_Buffer {
 					$this->append_text_chunk( $output, $at_line_start, $wrappers, $chunk );
 				}
 				$offset = $event['position'];
-			}
-			if ( $event['skip'] ) {
-				continue;
 			}
 			if ( $code && ! in_array( $event['type'], array( 'code', 'link', 'break' ), true ) ) {
 				continue;
