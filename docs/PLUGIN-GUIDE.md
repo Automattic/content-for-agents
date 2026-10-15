@@ -19,6 +19,8 @@ For a published post at `/example/`, the canonical Markdown URL is
 it is `?p=123&markdown=true`. Discovery links use the appropriate form. The
 static front page uses `/?markdown=true`; `/markdown` remains available as a
 normal page. Its old slug does not provide a hidden Markdown path.
+If a child page occupies a post's `/markdown` path, the child keeps that URL
+and the parent uses `?markdown=true`. Discovery links use the query URL.
 If another page's permalink resolves to the site root, no Markdown URL is
 advertised because that URL cannot identify the page.
 
@@ -39,6 +41,8 @@ Unprotected published posts are public. For other statuses, WordPress must
 resolve a singular post and grant the visitor read permission.
 WordPress validates preview revisions and nonces before the plugin serves
 them; an authenticated `?p=ID` request may also resolve a readable draft.
+The query and Accept routes use the post selected by WordPress's original main
+query. They do not use the mutable global post to identify the request.
 The plugin does not look up unresolved drafts, pending posts, scheduled posts,
 or custom statuses by ID. Trash, auto-drafts, revisions, and other internal
 statuses are never served. Password-protected content requires the password

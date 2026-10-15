@@ -33,37 +33,27 @@ class Markdown_Converter {
 			return '';
 		}
 
-		/**
-		 * Allow plugins to supply pre-built Markdown, bypassing block conversion.
-		 *
-		 * Return a non-null string to short-circuit conversion. Return null to fall
-		 * through to the standard pipeline. Useful for post types that store Markdown
-		 * directly in meta (e.g. OCR-extracted content).
-		 *
-		 * @param string|WP_Error|null $pre Pre-built Markdown, a failure, or null to use default conversion.
-		 * @param \WP_Post    $post_object The post being converted.
-		 */
-		$pre = apply_filters( 'content_for_agents_pre_markdown', null, $post_object );
-		if ( null !== $pre ) {
-			if ( is_wp_error( $pre ) || is_string( $pre ) ) {
-				return $pre;
-			}
-			return new WP_Error( 'content_for_agents_invalid_pre_markdown_value', 'Pre-Markdown filter returned a non-string value.' );
-		}
-
-		// Dynamic blocks may read the global post, which setup_postdata() does not
-		// assign. Temporarily set it, then restore the caller's exact state.
-		$keys  = array( 'post', 'id', 'authordata', 'currentday', 'currentmonth', 'page', 'pages', 'multipage', 'more', 'numpages' );
-		$saved = array();
-		foreach ( $keys as $key ) {
-			if ( array_key_exists( $key, $GLOBALS ) ) {
-				$saved[ $key ] = $GLOBALS[ $key ];
-			}
-		}
-
+		// Direct converter calls need post globals for block rendering and callbacks.
+		$context = new Post_Context( $post_object );
 		try {
-			$GLOBALS['post'] = $post_object; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-			setup_postdata( $post_object );
+			/**
+			 * Allow plugins to supply pre-built Markdown, bypassing block conversion.
+			 *
+			 * Return a non-null string to short-circuit conversion. Return null to fall
+			 * through to the standard pipeline. Useful for post types that store Markdown
+			 * directly in meta (e.g. OCR-extracted content).
+			 *
+			 * @param string|WP_Error|null $pre Pre-built Markdown, a failure, or null to use default conversion.
+			 * @param \WP_Post    $post_object The post being converted.
+			 */
+			$pre = apply_filters( 'content_for_agents_pre_markdown', null, $post_object );
+			if ( null !== $pre ) {
+				if ( is_wp_error( $pre ) || is_string( $pre ) ) {
+					return $pre;
+				}
+				return new WP_Error( 'content_for_agents_invalid_pre_markdown_value', 'Pre-Markdown filter returned a non-string value.' );
+			}
+
 			$markdown = $this->blocks_to_markdown( parse_blocks( $post_object->post_content ), $post_object );
 			if ( is_wp_error( $markdown ) ) {
 				return $markdown;
@@ -72,13 +62,7 @@ class Markdown_Converter {
 			// Match WordPress's the_content handling of legacy same-site HTTP URLs.
 			return wp_replace_insecure_home_url( $markdown );
 		} finally {
-			foreach ( $keys as $key ) {
-				if ( array_key_exists( $key, $saved ) ) {
-					$GLOBALS[ $key ] = $saved[ $key ]; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Restoring core globals by name.
-				} else {
-					unset( $GLOBALS[ $key ] ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Restoring core globals by name.
-				}
-			}
+			$context->restore();
 		}
 	}
 

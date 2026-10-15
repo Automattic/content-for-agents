@@ -56,6 +56,7 @@ Before committing or pushing, have an independent agent review the full change s
 - Use `/markdown` for individual documents with pretty permalinks and `markdown=true` with plain permalinks or a static front page. WordPress must resolve non-public posts and grant read permission.
 - For the Accept route, support a case-sensitive `text/markdown` substring anywhere in the header value. This includes quoted parameters and `q=0`; mixed-case media types do not match. HTTP header names remain case insensitive. Keep response selection consistent with shared cache variants, and document these negotiation exceptions.
 - Preserve access controls for private, draft, preview, and password-protected content. Never cache authenticated, preview, or password-authorized Markdown in a shared cache.
+- Keep separate `Post_Context` scopes for filtered titles, body conversion, and response assembly. WordPress and third-party callbacks may read or change global `$post` despite receiving a post argument. Restore the caller's globals after each phase, including failures, and preserve context for direct converter calls. See `docs/ARCHITECTURE.md`.
 - Cache invalidation changes must consider current and former `/markdown` and `markdown=true` URLs, plus parents, taxonomy changes, and author display-name changes.
 - Update `README.md` when the project overview, installation, or supported versions change; update `docs/PLUGIN-GUIDE.md` when behavior or extension contracts change.
 

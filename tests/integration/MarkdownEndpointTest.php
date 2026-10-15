@@ -342,6 +342,31 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * The original main query determines which post an Accept request serves.
+	 */
+	public function test_accept_request_ignores_replaced_global_post_and_query(): void {
+		$requested_id           = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$other_id               = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$old_accept             = $_SERVER['HTTP_ACCEPT'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Preserve test request state.
+		$_SERVER['HTTP_ACCEPT'] = 'text/markdown';
+		$this->go_to( get_permalink( $requested_id ) );
+
+		global $post, $wp_query;
+		$original_post  = $post;
+		$original_query = $wp_query;
+		$post           = get_post( $other_id );
+		$wp_query       = new \WP_Query( array( 'p' => $other_id ) );
+		try {
+			$this->assertSame( $requested_id, $this->endpoint->get_query_post_for_test()->ID );
+			$this->assertSame( array( 'Vary' => 'Accept' ), $this->endpoint->add_accept_vary( array() ) );
+		} finally {
+			$post     = $original_post;
+			$wp_query = $original_query;
+			$this->restore_server_value( 'HTTP_ACCEPT', $old_accept );
+		}
+	}
+
+	/**
 	 * Header negotiation cannot bypass an integration's access veto.
 	 */
 	public function test_accept_header_respects_markdown_access_filter(): void {
@@ -817,6 +842,53 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 
 		$this->assertSame( home_url( '/markdown/markdown' ), Markdown_Endpoint::get_url( $page_id ) );
 		$this->assertTrue( $this->endpoint->can_serve_path_for_test( get_post( $page_id ) ) );
+	}
+
+	/**
+	 * A real child page owns its URL, while its parent uses the query endpoint.
+	 */
+	public function test_markdown_child_page_takes_precedence_over_parent_path(): void {
+		$this->configure_permalink_structure( '/%postname%/' );
+		$parent_id   = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_name'   => 'parent',
+			)
+		);
+		$parent_path = home_url( '/parent/markdown' );
+		$this->assertSame( $parent_path, Markdown_Endpoint::get_path_url( $parent_id ) );
+		$child_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_name'   => 'markdown',
+				'post_parent' => $parent_id,
+			)
+		);
+
+		$wp          = new \WP();
+		$wp->request = 'parent/markdown';
+		$this->endpoint->maybe_serve( $wp );
+		$this->assertSame( '', Markdown_Endpoint::get_path_url( $parent_id ) );
+		$this->assertSame( Markdown_Endpoint::get_query_url( $parent_id ), Markdown_Endpoint::get_url( $parent_id ) );
+		$this->assertSame( home_url( '/parent/markdown/markdown' ), Markdown_Endpoint::get_url( $child_id ) );
+		$purge_urls = ( new Markdown_Cache_Invalidator( new Loader() ) )->add_vip_purge_urls( array(), $parent_id );
+		$this->assertContains( $parent_path, $purge_urls );
+		$this->assertContains( $parent_path . '/', $purge_urls );
+
+		$this->go_to( Markdown_Endpoint::get_query_url( $parent_id ) );
+		$_GET['markdown'] = 'true';
+		$this->assertSame( $parent_id, $this->endpoint->get_query_post_for_test()->ID );
+
+		$force_miss = static fn(): string => 'https://invalid.example/';
+		add_filter( 'url_to_postid', $force_miss );
+		try {
+			$this->endpoint->maybe_serve( $wp );
+			$this->assertSame( '', Markdown_Endpoint::get_path_url( $parent_id ) );
+		} finally {
+			remove_filter( 'url_to_postid', $force_miss );
+		}
 	}
 
 	/**

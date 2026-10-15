@@ -40,6 +40,10 @@ class Markdown_Endpoint {
 		if ( null === $post_path ) {
 			return;
 		}
+		// A real post at this URL takes precedence over the parent's Markdown path.
+		if ( self::get_canonical_post_at_path( (string) $wp->request ) ) {
+			return;
+		}
 
 		$post = $this->get_post_from_path( $post_path );
 		if ( ! $post instanceof \WP_Post || ! $this->can_serve_path( $post ) ) {
@@ -59,9 +63,9 @@ class Markdown_Endpoint {
 	 * @return \WP_Post|null Resolved post.
 	 */
 	protected function get_post_from_path( string $post_path ): ?\WP_Post {
-		$post_id = $this->url_to_post_id( home_url( '/' . $post_path . '/' ) );
+		$post_id = self::url_to_post_id( home_url( '/' . $post_path . '/' ) );
 		if ( ! $post_id ) {
-			$post_id = $this->url_to_post_id( home_url( '/' . $post_path ) );
+			$post_id = self::url_to_post_id( home_url( '/' . $post_path ) );
 		}
 		$post = $post_id ? get_post( $post_id ) : null;
 		if ( $post instanceof \WP_Post ) {
@@ -74,10 +78,35 @@ class Markdown_Endpoint {
 		if ( ! $page instanceof \WP_Post ) {
 			return null;
 		}
-		$permalink = get_permalink( $page );
-		return is_string( $permalink ) && untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' . $post_path . '/' ) )
-			? $page
-			: null;
+		return self::permalink_matches( $page, home_url( '/' . $post_path . '/' ) ) ? $page : null;
+	}
+
+	/**
+	 * Find a post whose permalink exactly matches a requested path.
+	 *
+	 * @param string $path Site-relative path.
+	 * @return \WP_Post|null Canonical post at the path, if one exists.
+	 */
+	private static function get_canonical_post_at_path( string $path ): ?\WP_Post {
+		$url     = home_url( '/' . trim( $path, '/' ) . '/' );
+		$post_id = self::url_to_post_id( $url );
+		$post    = $post_id ? get_post( $post_id ) : null;
+		if ( $post instanceof \WP_Post && self::permalink_matches( $post, $url ) ) {
+			return $post;
+		}
+
+		// URL lookup can miss nested pages when another plugin owns their rewrite.
+		$page = get_page_by_path( $path, OBJECT, 'page' );
+		return $page instanceof \WP_Post && self::permalink_matches( $page, $url ) ? $page : null;
+	}
+
+	/**
+	 * @param \WP_Post $post Post to check.
+	 * @param string   $url  Requested URL.
+	 */
+	private static function permalink_matches( \WP_Post $post, string $url ): bool {
+		$permalink = get_permalink( $post );
+		return is_string( $permalink ) && untrailingslashit( $permalink ) === untrailingslashit( $url );
 	}
 
 	/**
@@ -138,6 +167,31 @@ class Markdown_Endpoint {
 	 * @return string Path endpoint URL, or an empty string when unsupported.
 	 */
 	public static function get_path_url( $post ): string {
+		$url = self::get_path_url_for_purge( $post );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+		$home = wp_parse_url( home_url( '/' ), PHP_URL_PATH );
+		// The collision lookup expects a site-relative path, including on subdirectory installs.
+		if ( is_string( $path ) && is_string( $home ) && str_starts_with( $path, $home )
+			&& self::get_canonical_post_at_path( ltrim( substr( $path, strlen( $home ) ), '/' ) ) ) {
+			return '';
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Get a possible Markdown path even when another post now owns that URL.
+	 *
+	 * @internal Used to purge paths that may have served Markdown before a collision.
+	 *
+	 * @param int|\WP_Post $post Post ID or object.
+	 * @return string Possible path URL, or an empty string when unsupported.
+	 */
+	public static function get_path_url_for_purge( $post ): string {
 		if ( '' === (string) get_option( 'permalink_structure', '' ) ) {
 			return '';
 		}
@@ -193,7 +247,7 @@ class Markdown_Endpoint {
 	 * @param string $url Permalink to resolve.
 	 * @return int Post ID, or zero when no post matches.
 	 */
-	private function url_to_post_id( string $url ): int {
+	private static function url_to_post_id( string $url ): int {
 		if ( function_exists( 'wpcom_vip_url_to_postid' ) ) {
 			return (int) wpcom_vip_url_to_postid( $url );
 		}
@@ -252,15 +306,28 @@ class Markdown_Endpoint {
 	protected function get_query_post(): ?\WP_Post {
 		$query_requested = $this->request_wants_markdown_query();
 		// Feed and embed URLs keep their WordPress format unless the query requests Markdown.
-		if ( ! is_singular() || ( ! $query_requested && ( is_feed() || is_embed() || ! $this->request_wants_markdown_accept() ) ) ) {
+		global $wp_the_query;
+		$post = self::get_main_query_post();
+		if ( ! $post || ( ! $query_requested && ( $wp_the_query->is_feed() || $wp_the_query->is_embed() || ! $this->request_wants_markdown_accept() ) ) ) {
 			return null;
 		}
 
-		global $post;
-		if ( ! $post instanceof \WP_Post || ! $this->can_serve_query( $post ) ) {
+		return $this->can_serve_query( $post ) ? $post : null;
+	}
+
+	/**
+	 * Get the post WordPress resolved in the original main query.
+	 *
+	 * @return \WP_Post|null Resolved post, if the request is singular.
+	 */
+	private static function get_main_query_post(): ?\WP_Post {
+		global $wp_the_query;
+		if ( ! $wp_the_query instanceof \WP_Query || ! $wp_the_query->is_singular() ) {
 			return null;
 		}
-		return $post;
+
+		$post = $wp_the_query->get_queried_object();
+		return $post instanceof \WP_Post ? $post : null;
 	}
 
 	/**
@@ -286,12 +353,13 @@ class Markdown_Endpoint {
 	 * @return array Response headers.
 	 */
 	public function add_accept_vary( array $headers ): array {
-		if ( ! is_singular() || is_feed() || is_embed() || $this->request_wants_markdown_query() ) {
+		global $wp_the_query;
+		$post = self::get_main_query_post();
+		if ( ! $post || $wp_the_query->is_feed() || $wp_the_query->is_embed() || $this->request_wants_markdown_query() ) {
 			return $headers;
 		}
 
-		$post = get_queried_object();
-		if ( ! $post instanceof \WP_Post || 'publish' !== $post->post_status || '' !== $post->post_password
+		if ( 'publish' !== $post->post_status || '' !== $post->post_password
 			|| ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
 			return $headers;
 		}

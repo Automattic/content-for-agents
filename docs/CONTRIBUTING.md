@@ -89,7 +89,8 @@ The `/markdown` endpoint uses WordPress's normalized path during
 `parse_request`. It does not use stored rewrite rules or activation hooks;
 VIP application loaders may not run activation hooks. The `markdown=true`
 endpoint and `Accept: text/markdown` negotiation run during
-`template_redirect`, after WordPress resolves the post. Neither looks up
+`template_redirect`, after WordPress resolves the post. They use the original
+main query rather than the mutable global post. Neither looks up
 unresolved post IDs. The plugin selects Markdown when the Accept value
 contains the lowercase `text/markdown` string, including in `q=0` or quoted
 parameters. Keep this behavior consistent with shared cache variants on the
