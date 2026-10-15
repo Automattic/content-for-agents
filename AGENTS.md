@@ -40,6 +40,13 @@ git diff --check
 
 Before committing or pushing, have an independent agent review the full change set. Resolve verified findings and rerun relevant checks.
 
+## Pull requests
+
+- Follow `.github/pull_request_template.md` when proposing or opening a PR. Describe only changes between the branch and trunk, and replace the template's guidance with specific content.
+- Include relevant automated commands under Testing and reproducible steps with expected results under Manual testing. Remove a section when it does not apply.
+- Include screenshots for visual changes when they help review. Omit a screenshots section for changes without visuals.
+- Prepare the title and description for review before opening a PR unless the user has explicitly authorized opening it.
+
 ## Generated files and dependencies
 
 - Do not commit `vendor/`. Composer installs development-only coding-standard tools, and the deployed plugin does not load Composer's autoloader.
