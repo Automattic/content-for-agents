@@ -36,11 +36,10 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
-          cache: npm
 
       - name: Build plugin ZIP
         if: steps.version_check.outputs.new_version
-        run: npm ci --ignore-scripts && npm run plugin-zip
+        run: npm run plugin-zip
 
       - name: Create release
         if: steps.version_check.outputs.new_version
