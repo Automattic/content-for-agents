@@ -28,6 +28,41 @@ flowchart TD
     P --> Z
 ```
 
+## Publication-time block telemetry
+
+`Post_Block_Telemetry` runs on `wp_after_insert_post`, independently of Markdown
+requests. It skips unsupported or unpublished posts and published updates whose
+content is unchanged. On publication it parses the saved content once; on a
+published content edit it parses the previous and current content to compare
+counts. It walks named blocks, including nested blocks, and checks
+`Block_Markdown_Registry` without rendering blocks or running callbacks. The
+Block Editor's client-side tree cannot determine which PHP Markdown callbacks
+are registered, and the server save hook supplies post objects rather than a
+parsed block tree.
+
+The counts use `parse_blocks()` so they agree with the Markdown converter. A
+local synthetic benchmark with an in-memory telemetry client measured about
+0.1 ms for publication and 0.2 ms for a content edit at 100 blocks; at 5,000
+blocks, about 4.7 ms and 9.6 ms. Metadata-only edits skip parsing. WordPress's
+streaming `WP_Block_Processor` was modestly faster, but it counted some
+malformed block markup differently from `parse_blocks()`. Keeping the same
+parser avoids reporting blocks that the converter would not process. These
+measurements exclude the VIP telemetry client's event-queue cost.
+
+For example, consider an orphan closing delimiter before a custom block:
+
+```html
+<!-- /wp:acme/other -->
+<!-- wp:acme/card /-->
+```
+
+A counter using `WP_Block_Processor::next_block()` skips the closer and counts
+the `acme/card` block. `parse_blocks()` stops at the orphan closer and returns
+that content as freeform, so the named block count is zero. This one-versus-zero
+difference also appeared in a local malformed-markup test. Since the Markdown
+converter uses `parse_blocks()`, telemetry uses it too so both interpret the
+saved content the same way.
+
 ## Choosing a path for each block
 
 `Markdown_Converter` parses the stored `post_content` with `parse_blocks()`.

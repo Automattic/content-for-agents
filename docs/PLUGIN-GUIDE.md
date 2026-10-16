@@ -12,6 +12,30 @@ callbacks can supply content.
 
 ## Content and discovery
 
+### Block callback coverage telemetry
+
+When a supported post enters the `publish` status, or its block counts change
+while it remains published, the plugin records one
+`contentforagents_post_block_callback_coverage` event through the VIP
+mu-plugins telemetry library, if available. Republish after another status
+also records an event. Changes to metadata or content that leave both counts
+unchanged do not record an event. The event includes `post_type`, `post_id`,
+`blog_id`, `total_blocks`, and
+`blocks_with_custom_callbacks`. The plugin supplies `plugin_version` globally;
+the VIP library supplies its environment and multisite properties.
+
+The counts include named blocks in saved `post_content`, including nested
+blocks. Freeform HTML has no block name and is excluded. A block counts as
+having a custom callback when its name is present in
+`Block_Markdown_Registry`. This check does not render content or execute
+callbacks, so it reports registration rather than actual callback execution.
+No post content or block attributes are sent.
+
+Events use the current WordPress user when one exists. Scheduled publication
+can run without a current user; in that case, the plugin records as the post
+author when the author is a valid user, then restores the previous user. An
+event is skipped when neither user is available.
+
 ### URLs and access
 
 For a published post at `/example/`, the canonical Markdown URL is
