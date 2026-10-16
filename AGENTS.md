@@ -40,6 +40,10 @@ git diff --check
 
 Before committing or pushing, have an independent agent review the full change set. Resolve verified findings and rerun relevant checks.
 
+## Branches
+
+Prefix new branch names by purpose, such as `feature/`, `bugfix/`, `docs/`, or `chore/`.
+
 ## Pull requests
 
 - Follow `.github/pull_request_template.md` when proposing or opening a PR. Describe only changes between the branch and trunk, and replace the template's guidance with specific content.
