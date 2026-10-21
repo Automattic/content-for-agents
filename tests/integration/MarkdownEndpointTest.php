@@ -23,9 +23,9 @@ require_once __DIR__ . '/support/class-testable-markdown-endpoint.php';
 class MarkdownEndpointTest extends \WP_UnitTestCase {
 
 	/**
-	 * Failed block conversion returns a 500 without caching partial Markdown.
+	 * Failed block conversion returns a 500 without a body.
 	 */
-	public function test_callback_failure_returns_500_without_caching_partial_markdown(): void {
+	public function test_callback_failure_returns_500_without_body(): void {
 		Block_Markdown_Registry::register(
 			'content-for-agents/endpoint-failure',
 			static function (): void {
@@ -38,13 +38,13 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 				'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/endpoint-failure /-->',
 			)
 		);
-		$this->assert_500_without_cache( $post );
+		$this->assert_500_without_body( $post );
 	}
 
 	/**
-	 * A thrown response filter failure also returns a generic uncached 500.
+	 * A thrown response filter failure also returns a generic 500 without a body.
 	 */
-	public function test_response_exception_returns_500_without_caching(): void {
+	public function test_response_exception_returns_500_without_body(): void {
 		$post = self::factory()->post->create_and_get(
 			array(
 				'post_status'  => 'publish',
@@ -56,7 +56,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		};
 		add_filter( 'content_for_agents_after_markdown', $fail );
 		try {
-			$this->assert_500_without_cache( $post );
+			$this->assert_500_without_body( $post );
 		} finally {
 			remove_filter( 'content_for_agents_after_markdown', $fail );
 		}
