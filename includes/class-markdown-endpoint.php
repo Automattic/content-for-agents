@@ -23,6 +23,7 @@ class Markdown_Endpoint {
 	public function __construct( Loader $loader ) {
 		$loader->add_action( 'parse_request', $this, 'maybe_serve', 1 );
 		$loader->add_action( 'template_redirect', $this, 'maybe_serve_query', 1 );
+		$loader->add_filter( 'wp_headers', $this, 'add_accept_vary', PHP_INT_MAX );
 	}
 
 	/**
@@ -37,6 +38,10 @@ class Markdown_Endpoint {
 
 		$post_path = self::get_post_path( (string) $wp->request );
 		if ( null === $post_path ) {
+			return;
+		}
+		// A real post at this URL takes precedence over the parent's Markdown path.
+		if ( self::get_canonical_post_at_path( (string) $wp->request ) ) {
 			return;
 		}
 
@@ -58,9 +63,9 @@ class Markdown_Endpoint {
 	 * @return \WP_Post|null Resolved post.
 	 */
 	protected function get_post_from_path( string $post_path ): ?\WP_Post {
-		$post_id = $this->url_to_post_id( home_url( '/' . $post_path . '/' ) );
+		$post_id = self::url_to_post_id( home_url( '/' . $post_path . '/' ) );
 		if ( ! $post_id ) {
-			$post_id = $this->url_to_post_id( home_url( '/' . $post_path ) );
+			$post_id = self::url_to_post_id( home_url( '/' . $post_path ) );
 		}
 		$post = $post_id ? get_post( $post_id ) : null;
 		if ( $post instanceof \WP_Post ) {
@@ -73,14 +78,39 @@ class Markdown_Endpoint {
 		if ( ! $page instanceof \WP_Post ) {
 			return null;
 		}
-		$permalink = get_permalink( $page );
-		return is_string( $permalink ) && untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' . $post_path . '/' ) )
-			? $page
-			: null;
+		return self::permalink_matches( $page, home_url( '/' . $post_path . '/' ) ) ? $page : null;
 	}
 
 	/**
-	 * Serve a supported post requested with `?markdown=true`.
+	 * Find a post whose permalink exactly matches a requested path.
+	 *
+	 * @param string $path Site-relative path.
+	 * @return \WP_Post|null Canonical post at the path, if one exists.
+	 */
+	private static function get_canonical_post_at_path( string $path ): ?\WP_Post {
+		$url     = home_url( '/' . trim( $path, '/' ) . '/' );
+		$post_id = self::url_to_post_id( $url );
+		$post    = $post_id ? get_post( $post_id ) : null;
+		if ( $post instanceof \WP_Post && self::permalink_matches( $post, $url ) ) {
+			return $post;
+		}
+
+		// URL lookup can miss nested pages when another plugin owns their rewrite.
+		$page = get_page_by_path( $path, OBJECT, 'page' );
+		return $page instanceof \WP_Post && self::permalink_matches( $page, $url ) ? $page : null;
+	}
+
+	/**
+	 * @param \WP_Post $post Post to check.
+	 * @param string   $url  Requested URL.
+	 */
+	private static function permalink_matches( \WP_Post $post, string $url ): bool {
+		$permalink = get_permalink( $post );
+		return is_string( $permalink ) && untrailingslashit( $permalink ) === untrailingslashit( $url );
+	}
+
+	/**
+	 * Serve a supported post requested with `?markdown=true` or an Accept header.
 	 *
 	 * WordPress resolves the singular post and preview state before this hook.
 	 */
@@ -137,6 +167,31 @@ class Markdown_Endpoint {
 	 * @return string Path endpoint URL, or an empty string when unsupported.
 	 */
 	public static function get_path_url( $post ): string {
+		$url = self::get_path_url_for_purge( $post );
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$path = wp_parse_url( $url, PHP_URL_PATH );
+		$home = wp_parse_url( home_url( '/' ), PHP_URL_PATH );
+		// The collision lookup expects a site-relative path, including on subdirectory installs.
+		if ( is_string( $path ) && is_string( $home ) && str_starts_with( $path, $home )
+			&& self::get_canonical_post_at_path( ltrim( substr( $path, strlen( $home ) ), '/' ) ) ) {
+			return '';
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Get a possible Markdown path even when another post now owns that URL.
+	 *
+	 * @internal Used to purge paths that may have served Markdown before a collision.
+	 *
+	 * @param int|\WP_Post $post Post ID or object.
+	 * @return string Possible path URL, or an empty string when unsupported.
+	 */
+	public static function get_path_url_for_purge( $post ): string {
 		if ( '' === (string) get_option( 'permalink_structure', '' ) ) {
 			return '';
 		}
@@ -144,6 +199,7 @@ class Markdown_Endpoint {
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
 			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type )
 			|| self::is_static_front_page( $post )
 		) {
 			return '';
@@ -151,6 +207,7 @@ class Markdown_Endpoint {
 
 		$permalink = get_permalink( $post );
 		if ( ! is_string( $permalink ) || '' === $permalink
+			|| untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' ) )
 			|| wp_parse_url( $permalink, PHP_URL_QUERY ) ) {
 			return '';
 		}
@@ -168,11 +225,18 @@ class Markdown_Endpoint {
 		$post = get_post( $post );
 		if ( ! $post instanceof \WP_Post
 			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type )
 		) {
 			return '';
 		}
 
 		$permalink = get_permalink( $post );
+		if ( ! self::is_static_front_page( $post )
+			&& is_string( $permalink )
+			&& untrailingslashit( $permalink ) === untrailingslashit( home_url( '/' ) )
+		) {
+			return '';
+		}
 
 		return is_string( $permalink ) && '' !== $permalink
 			? add_query_arg( 'markdown', 'true', $permalink )
@@ -185,7 +249,7 @@ class Markdown_Endpoint {
 	 * @param string $url Permalink to resolve.
 	 * @return int Post ID, or zero when no post matches.
 	 */
-	private function url_to_post_id( string $url ): int {
+	private static function url_to_post_id( string $url ): int {
 		if ( function_exists( 'wpcom_vip_url_to_postid' ) ) {
 			return (int) wpcom_vip_url_to_postid( $url );
 		}
@@ -214,7 +278,8 @@ class Markdown_Endpoint {
 	 * @return bool Whether the post may be served.
 	 */
 	protected function can_serve( \WP_Post $post ): bool {
-		if ( ! post_type_supports( $post->post_type, 'content-for-agents' ) ) {
+		if ( ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type ) ) {
 			return false;
 		}
 
@@ -242,16 +307,81 @@ class Markdown_Endpoint {
 	 * @return \WP_Post|null Resolved post, or null when the request is ineligible.
 	 */
 	protected function get_query_post(): ?\WP_Post {
-		if ( ! $this->request_wants_markdown_query() || ! is_singular() ) {
+		$query_requested = $this->request_wants_markdown_query();
+		// Feed and embed URLs keep their WordPress format unless the query requests Markdown.
+		global $wp_the_query;
+		$post = self::get_main_query_post();
+		if ( ! $post || ( ! $query_requested && ( $wp_the_query->is_feed() || $wp_the_query->is_embed() || ! $this->request_wants_markdown_accept() ) ) ) {
 			return null;
 		}
 
-		global $post;
-		if ( ! $post instanceof \WP_Post || ! $this->can_serve_query( $post ) ) {
+		return $this->can_serve_query( $post ) ? $post : null;
+	}
+
+	/**
+	 * Get the post WordPress resolved in the original main query.
+	 *
+	 * @return \WP_Post|null Resolved post, if the request is singular.
+	 */
+	private static function get_main_query_post(): ?\WP_Post {
+		global $wp_the_query;
+		if ( ! $wp_the_query instanceof \WP_Query || ! $wp_the_query->is_singular() ) {
 			return null;
 		}
 
-		return $post;
+		$post = $wp_the_query->get_queried_object();
+		return $post instanceof \WP_Post ? $post : null;
+	}
+
+	/**
+	 * Select the supported Markdown representation from the Accept value.
+	 *
+	 * A case-sensitive substring match, including quoted parameters and quality
+	 * weights, keeps the response format consistent within shared cache variants.
+	 */
+	protected function request_wants_markdown_accept(): bool {
+		$method = strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Compared with a fixed method allowlist.
+		$accept = $_SERVER['HTTP_ACCEPT'] ?? ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Compared with a fixed supported string.
+		if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) || ! is_string( $accept ) ) {
+			return false;
+		}
+
+		return false !== strpos( $accept, 'text/markdown' );
+	}
+
+	/**
+	 * Tell caches that the normal URL can serve HTML or Markdown by Accept value.
+	 *
+	 * @param array $headers WordPress response headers.
+	 * @return array Response headers.
+	 */
+	public function add_accept_vary( array $headers ): array {
+		global $wp_the_query;
+		$post = self::get_main_query_post();
+		if ( ! $post || $wp_the_query->is_feed() || $wp_the_query->is_embed() || $this->request_wants_markdown_query() ) {
+			return $headers;
+		}
+
+		if ( 'publish' !== $post->post_status || '' !== $post->post_password
+			|| ! post_type_supports( $post->post_type, 'content-for-agents' )
+			|| ! is_post_type_viewable( $post->post_type ) ) {
+			return $headers;
+		}
+
+		foreach ( $headers as $name => $value ) {
+			if ( 0 !== strcasecmp( (string) $name, 'Vary' ) ) {
+				continue;
+			}
+			$values = array_map( 'trim', explode( ',', (string) $value ) );
+			if ( in_array( '*', $values, true ) || in_array( 'accept', array_map( 'strtolower', $values ), true ) ) {
+				return $headers;
+			}
+			$headers[ $name ] = (string) $value . ', Accept';
+			return $headers;
+		}
+
+		$headers['Vary'] = 'Accept';
+		return $headers;
 	}
 
 	/**

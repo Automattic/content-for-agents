@@ -8,15 +8,18 @@ permissions:
 
 jobs:
   integration:
-    name: Integration (PHP ${{ matrix.php }}, WP ${{ matrix.wordpress }})
+    name: Integration (PHP ${{ matrix.php }}, WP ${{ matrix.wordpress.core }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5"]
-        wordpress: ["7.0-branch", "7.1-branch", "master"]
+        wordpress:
+          - { core: "7.0-branch", phpunit: "7.0" }
+          - { core: "7.1-branch", phpunit: "7.1" }
+          - { core: "master", phpunit: "trunk" }
     env:
-      WP_ENV_CORE: WordPress/WordPress#${{ matrix.wordpress }}
+      WP_ENV_CORE: WordPress/WordPress#${{ matrix.wordpress.core }}
       WP_ENV_PHP_VERSION: ${{ matrix.php }}
 
     steps:
@@ -42,13 +45,22 @@ jobs:
           npm ci --ignore-scripts
 
       - name: Check documentation and configuration formatting
-        if: matrix.php == '8.2' && matrix.wordpress == '7.0-branch'
         run: npm run format:check
 
-      - name: Run integration tests
+      - name: Start WordPress environment
+        run: npx wp-env start --config=.wp-env.test.json
+
+      # wp-env selects trunk's PHPUnit library for an alpha maintenance branch.
+      # wordpress-develop names its release branches without "-branch".
+      - name: Match the PHPUnit library to the WordPress branch
         run: |
-          npx wp-env start
-          npm run test:integration
+          path="$(npx wp-env status --config=.wp-env.test.json --json | jq -r .installPath)"
+          dir="$path/WordPress-PHPUnit"
+          git -C "$dir" fetch --depth 1 origin '${{ matrix.wordpress.phpunit }}'
+          git -C "$dir" checkout --force FETCH_HEAD
+
+      - name: Run integration tests
+        run: npm run test:integration
 
   result:
     name: Result

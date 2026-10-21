@@ -66,6 +66,35 @@ class MarkdownAccessTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Explicit Markdown support cannot expose a non-viewable post type.
+	 */
+	public function test_non_viewable_post_type_is_denied_for_response_and_discovery(): void {
+		register_post_type(
+			'cfa_internal',
+			array(
+				'public'             => false,
+				'publicly_queryable' => false,
+				'supports'           => array( 'content-for-agents' ),
+			)
+		);
+
+		try {
+			$post = self::factory()->post->create_and_get(
+				array(
+					'post_status' => 'publish',
+					'post_type'   => 'cfa_internal',
+				)
+			);
+			$this->assertFalse( is_post_type_viewable( 'cfa_internal' ) );
+			add_filter( 'content_for_agents_can_serve_markdown', '__return_true' );
+			$this->assertFalse( Markdown_Access::can_serve( $post ) );
+			$this->assertFalse( Markdown_Access::can_serve( $post, Markdown_Access::CONTEXT_DISCOVERY ) );
+		} finally {
+			unregister_post_type( 'cfa_internal' );
+		}
+	}
+
+	/**
 	 * A filter cannot advertise password-protected content publicly.
 	 */
 	public function test_filter_cannot_override_discovery_password_protection(): void {

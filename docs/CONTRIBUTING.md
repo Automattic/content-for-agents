@@ -42,10 +42,12 @@ npm ci
 npx wp-env start
 ```
 
-The development site uses <http://localhost:8910> and the test site uses port
-`8911` by default. If those ports are busy, run `npx wp-env start --auto-port`
-and use the printed URLs. Sign in at `/wp-admin/` with the default `wp-env`
-credentials (`admin` / `password`). Run `npx wp-env stop` when finished.
+The development site uses <http://localhost:8910>. The integration suite uses a
+separate site on port `8911`; start it with
+`npx wp-env start --config=.wp-env.test.json`. If a port is busy, add
+`--auto-port` to the corresponding start command. Sign in at `/wp-admin/` with
+the default `wp-env` credentials (`admin` / `password`). Stop each site with
+`npx wp-env stop`, passing `--config=.wp-env.test.json` for the test site.
 
 ## Architecture and request lifecycle
 
@@ -56,7 +58,8 @@ content-for-agents.php
   -> plugins_loaded: Bootstrap creates and registers the modules
   -> init: supported post types and block callbacks are registered
   -> parse_request: /markdown requests are handled
-  -> template_redirect: the markdown=true query endpoint is handled
+  -> wp_headers: eligible HTML pages add Vary: Accept
+  -> template_redirect: markdown=true and Accept requests are handled
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
@@ -73,6 +76,7 @@ The main responsibilities are divided as follows:
 | Plugin initialization and hooks | `Bootstrap`, `Loader`                                                            |
 | Dedicated Markdown URLs         | `Markdown_Endpoint`, `Markdown_Response`                                         |
 | Block conversion                | `Markdown_Converter`, `Block_Markdown_Registry`                                  |
+| Conversion diagnostics          | `Markdown_Conversion_Logger`                                                     |
 | HTML conversion                 | `HTML_To_Markdown_Converter`, `Markdown_Inline_Buffer`, `Markdown_Output_Writer` |
 | Document metadata               | `Frontmatter`                                                                    |
 | Discovery                       | `Discovery`, `Robots_Txt`                                                        |
@@ -87,8 +91,13 @@ callback precedence, options, metadata, or cache behavior.
 The `/markdown` endpoint uses WordPress's normalized path during
 `parse_request`. It does not use stored rewrite rules or activation hooks;
 VIP application loaders may not run activation hooks. The `markdown=true`
-endpoint runs during `template_redirect`, after WordPress resolves the post.
-It does not look up unresolved post IDs.
+endpoint and `Accept: text/markdown` negotiation run during
+`template_redirect`, after WordPress resolves the post. They use the original
+main query rather than the mutable global post. Neither looks up
+unresolved post IDs. The plugin selects Markdown when the Accept value
+contains the lowercase `text/markdown` string, including in `q=0` or quoted
+parameters. Keep this behavior consistent with shared cache variants on the
+supported hosting platform.
 
 ## Choose the right test layer
 
@@ -99,10 +108,11 @@ It does not look up unresolved post IDs.
 | Manual UI             | Public Markdown output in a real browser                                       | Exercise public URLs in a browser    |
 | VIP deployment        | Edge caching, purge propagation, provider services, and application load order | Verify in the target VIP application |
 
-Start `wp-env` before running the integration suite. Its bootstrap loads the
-base plugin. The suite uses a development-only Markdown parser to check how a
-reader interprets the exact-output fixtures. Deployment checks cannot be fully
-reproduced by `wp-env`.
+Start the test site with `npx wp-env start --config=.wp-env.test.json` before
+running the integration suite. Its bootstrap loads the base plugin. The suite
+uses a development-only Markdown parser to check how a reader interprets the
+exact-output fixtures. Deployment checks cannot be fully reproduced by
+`wp-env`.
 
 Tests should be added at the lowest layer that proves the behavior. Changes to
 WordPress hooks, permissions, conversion integration, or cache invalidation
@@ -120,7 +130,7 @@ composer check-platform-reqs
 composer phpcs
 composer test:unit
 npm run format:check
-npx wp-env start
+npx wp-env start --config=.wp-env.test.json
 npm run test:integration
 git diff --check
 ```
@@ -151,8 +161,9 @@ The base version appears in `package.json`, its lockfile, the plugin header, and
 `CONTENT_FOR_AGENTS_VERSION`. The **Create release PR** workflow updates these
 values. After that version change reaches `trunk`, the release workflow builds
 `content-for-agents.zip`, creates the matching `v{version}` tag, and publishes
-the ZIP. The `package.json` file list includes only runtime files and
-documentation; development files and provider-specific integrations are excluded.
+the ZIP. `npm run plugin-zip` archives the committed plugin code and docs from
+`HEAD`; uncommitted changes are not included. Development files, `package.json`,
+and provider-specific integrations are excluded.
 
 Integrations keep their dependencies, versioning, release process, and
 deployment separate from the base plugin.

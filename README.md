@@ -5,8 +5,9 @@
 # Content for Agents
 
 Content for Agents publishes WordPress posts and pages as Markdown. It serves
-`{permalink}/markdown` and `?markdown=true` URLs and advertises the Markdown
-version on each supported HTML page. It requires WordPress 7.0 or newer, PHP
+`{permalink}/markdown` and `?markdown=true` URLs, or responds to an explicit
+`Accept: text/markdown` request at the post's normal URL. It advertises the
+Markdown version on each supported HTML page. It requires WordPress 7.0 or newer, PHP
 8.2 or newer, and the WordPress VIP platform. On an unsupported runtime, the
 plugin does not load and shows an administrator notice.
 
@@ -16,7 +17,10 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
 ## Features
 
 - Serves posts and pages as Markdown with YAML frontmatter through
-  `{permalink}/markdown` or `?markdown=true`.
+  `{permalink}/markdown`, `?markdown=true`, or `Accept: text/markdown` at the
+  normal URL.
+- Recognizes the lowercase `text/markdown` text in Accept values. See the
+  [plugin guide](docs/PLUGIN-GUIDE.md) for matching details.
 - Converts nested Block Editor blocks, Classic Editor HTML, and posts that mix
   blocks with freeform HTML to readable Markdown.
 - Advertises Markdown alternatives on supported HTML pages.
@@ -37,7 +41,7 @@ VIP sandbox environments. The plugin has no analytics setting.
 
 | Counter                                  | When it is sent                                                                                                         |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `content-for-agents-markdown-served`     | A sampled Markdown response reaches WordPress and is served through either endpoint.                                    |
+| `content-for-agents-markdown-served`     | A sampled Markdown response reaches WordPress through a Markdown URL or the Accept route.                               |
 | `content-for-agents-block-callback-used` | The same sampled response invoked one or more registered block Markdown callbacks. Multiple callbacks still count once. |
 
 Each counter's value is the VIP customer site ID (`FILES_CLIENT_SITE_ID`). The
@@ -65,7 +69,9 @@ integration framework or provider-specific packages.
 For a post with plain permalinks, the Markdown URL is
 `?p=123&markdown=true`. The query endpoint also works with pretty
 permalinks. A static front page uses `/?markdown=true`, leaving `/markdown`
-available for a normal page. See the [plugin guide](docs/PLUGIN-GUIDE.md) for
+available for a normal page. If a child page occupies a post's `/markdown`
+path, that post uses `?markdown=true` instead. See the
+[plugin guide](docs/PLUGIN-GUIDE.md) for
 access rules, preview behavior, and extension points.
 
 If you are working from a source checkout, follow the development setup in the

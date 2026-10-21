@@ -342,7 +342,6 @@ final class HTML_To_Markdown_Converter {
 				$this->writer->mark_item_block( $context );
 				$context->pre_code     = '';
 				$context->pre_language = $this->code_language( $processor );
-				$context->in_pre       = true;
 			}
 			return;
 		}
@@ -584,7 +583,6 @@ final class HTML_To_Markdown_Converter {
 			}
 			$this->writer->append_line( $context->output, $fence, $context->at_line_start );
 			$this->writer->ensure_blank_line( $context->output, $context->at_line_start );
-			$context->in_pre       = false;
 			$context->pre_language = null;
 		}
 	}

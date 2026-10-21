@@ -12,11 +12,39 @@ use Content_For_Agents\Block_Markdown_Registry;
 use Content_For_Agents\HTML_To_Markdown_Converter;
 use Content_For_Agents\Markdown_Converter;
 use Content_For_Agents\Markdown_Response;
+use Content_For_Agents\Post_Context;
 
 /**
  * Exercises Markdown conversion in WordPress.
  */
 class MarkdownConversionTest extends \WP_UnitTestCase {
+	/**
+	 * A failing post setup does not leave the requested post in template globals.
+	 */
+	public function test_post_context_restores_globals_when_setup_fails(): void {
+		$target = self::factory()->post->create_and_get();
+		$other  = self::factory()->post->create_and_get();
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$fail          = static function (): void {
+			throw new \RuntimeException( 'Post setup failed' );
+		};
+		add_action( 'the_post', $fail );
+		try {
+			try {
+				new Post_Context( $target );
+				$this->fail( 'Expected post setup to fail.' );
+			} catch ( \RuntimeException $error ) {
+				$this->assertSame( 'Post setup failed', $error->getMessage() );
+			}
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_action( 'the_post', $fail );
+			$post = $previous_post;
+		}
+	}
+
 	/**
 	 * The default title prefix can be replaced or removed by an integration.
 	 */
@@ -93,6 +121,197 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 		$this->assertStringContainsString( '"description": "SEO description"', $content );
 		$this->assertStringNotContainsString( 'WordPress excerpt.', $content );
 		$this->assertStringContainsString( "---\n\n# Custom heading\n\nContext note.\n\nBody text.\n\nAfter marker.", $content );
+	}
+
+	/**
+	 * Excerpt filters see the response post even when another loop changed globals.
+	 */
+	public function test_frontmatter_excerpt_uses_response_post_context(): void {
+		$target = self::factory()->post->create_and_get(
+			array(
+				'post_title'   => 'Target',
+				'post_content' => '<!-- wp:paragraph --><p>Target body.</p><!-- /wp:paragraph -->',
+			)
+		);
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other' ) );
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$excerpt       = static function (): string {
+			global $post;
+			return $post->post_title . ' excerpt';
+		};
+		add_filter( 'get_the_excerpt', $excerpt );
+		try {
+			$method = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$output = $method->invoke( null, $target, 'Target' );
+			$this->assertStringContainsString( '"description": "Target excerpt"', $output );
+			$this->assertSame( $other, $post );
+
+			$fail = static function (): void {
+				throw new \RuntimeException( 'Frontmatter filter failed' );
+			};
+			add_filter( 'content_for_agents_frontmatter', $fail );
+			try {
+				$this->assertWPError( $method->invoke( null, $target, 'Target' ) );
+				$this->assertSame( $other, $post );
+			} finally {
+				remove_filter( 'content_for_agents_frontmatter', $fail );
+			}
+		} finally {
+			remove_filter( 'get_the_excerpt', $excerpt );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * Title filters see the requested post even when another loop changed globals.
+	 */
+	public function test_response_title_uses_requested_post_context(): void {
+		$target = self::factory()->post->create_and_get( array( 'post_title' => 'Target title' ) );
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other title' ) );
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$title_filter  = static function (): string {
+			global $post;
+			return $post->post_title;
+		};
+		add_filter( 'the_title', $title_filter );
+		try {
+			$method = new \ReflectionMethod( Markdown_Response::class, 'get_response_title' );
+			$this->assertSame( 'Target title', $method->invoke( null, $target ) );
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_filter( 'the_title', $title_filter );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * A title filter changing the global post cannot affect later frontmatter.
+	 */
+	public function test_title_filter_does_not_pollute_frontmatter_context(): void {
+		$target = self::factory()->post->create_and_get( array( 'post_title' => 'Target title' ) );
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other title' ) );
+		global $post;
+		$previous_post  = $post;
+		$post           = $other;
+		$first_title    = true;
+		$title_filter   = static function ( string $title ) use ( $other, &$first_title ): string {
+			if ( $first_title ) {
+				global $post;
+				$post        = $other;
+				$first_title = false;
+			}
+			return $title;
+		};
+		$excerpt_filter = static function (): string {
+			global $post;
+			return $post->post_title;
+		};
+		add_filter( 'the_title', $title_filter );
+		add_filter( 'get_the_excerpt', $excerpt_filter );
+		try {
+			$title_method = new \ReflectionMethod( Markdown_Response::class, 'get_response_title' );
+			$body_method  = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$title        = $title_method->invoke( null, $target );
+			$body         = $body_method->invoke( null, $target, $title );
+			$this->assertStringContainsString( '"description": "Target title"', $body );
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_filter( 'the_title', $title_filter );
+			remove_filter( 'get_the_excerpt', $excerpt_filter );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * The pre-Markdown callback also sees the post passed to the converter.
+	 */
+	public function test_pre_markdown_filter_uses_conversion_post_context(): void {
+		$target = self::factory()->post->create_and_get( array( 'post_title' => 'Target' ) );
+		$other  = self::factory()->post->create_and_get( array( 'post_title' => 'Other' ) );
+		global $post;
+		$previous_post = $post;
+		$post          = $other;
+		$pre           = static function (): string {
+			global $post;
+			return $post->post_title;
+		};
+		add_filter( 'content_for_agents_pre_markdown', $pre );
+		try {
+			$this->assertSame( 'Target', ( new Markdown_Converter() )->post_to_markdown( $target ) );
+			$this->assertSame( $other, $post );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $pre );
+			$post = $previous_post;
+		}
+	}
+
+	/**
+	 * Response filters can stop document assembly without losing their error.
+	 */
+	public function test_response_filter_errors_remain_available_for_logging(): void {
+		$post   = self::factory()->post->create_and_get();
+		$method = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+		$error  = new \WP_Error( 'integration_failed', 'Private diagnostic' );
+		$fail   = static fn(): \WP_Error => $error;
+
+		foreach ( array( 'content_for_agents_after_markdown', 'content_for_agents_markdown_prefix' ) as $hook ) {
+			add_filter( $hook, $fail );
+			try {
+				$this->assertSame( $error, $method->invoke( null, $post, 'Response test' ) );
+			} finally {
+				remove_filter( $hook, $fail );
+			}
+		}
+	}
+
+	/**
+	 * Invalid response filter values fail instead of changing the document.
+	 */
+	public function test_invalid_response_filter_values_fail_conversion(): void {
+		$post    = self::factory()->post->create_and_get();
+		$method  = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+		$invalid = static fn(): array => array( 'unexpected' );
+		$hooks   = array(
+			'content_for_agents_after_markdown'  => 'content_for_agents_invalid_after_markdown_value',
+			'content_for_agents_markdown_prefix' => 'content_for_agents_invalid_prefix_value',
+		);
+
+		foreach ( $hooks as $hook => $code ) {
+			add_filter( $hook, $invalid );
+			try {
+				$error = $method->invoke( null, $post, 'Response test' );
+				$this->assertWPError( $error );
+				$this->assertSame( $code, $error->get_error_code() );
+			} finally {
+				remove_filter( $hook, $invalid );
+			}
+		}
+	}
+
+	/**
+	 * A thrown response filter failure becomes a WP_Error with its cause intact.
+	 */
+	public function test_response_exception_becomes_wp_error(): void {
+		$post      = self::factory()->post->create_and_get();
+		$exception = new \RuntimeException( 'Private diagnostic' );
+		$fail      = static function () use ( $exception ): void {
+			throw $exception;
+		};
+		add_filter( 'content_for_agents_after_markdown', $fail );
+		try {
+			$method = new \ReflectionMethod( Markdown_Response::class, 'build_content' );
+			$error  = $method->invoke( null, $post, 'Response test' );
+		} finally {
+			remove_filter( 'content_for_agents_after_markdown', $fail );
+		}
+
+		$this->assertWPError( $error );
+		$this->assertSame( 'content_for_agents_response_exception', $error->get_error_code() );
+		$this->assertSame( $exception, $error->get_error_data() );
 	}
 
 	/**
@@ -191,6 +410,22 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Invalid pre-Markdown values fail instead of being cast to strings.
+	 */
+	public function test_invalid_pre_markdown_value_fails_conversion(): void {
+		$post    = self::factory()->post->create_and_get();
+		$invalid = static fn(): array => array( 'unexpected' );
+		add_filter( 'content_for_agents_pre_markdown', $invalid );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$this->assertWPError( $error );
+			$this->assertSame( 'content_for_agents_invalid_pre_markdown_value', $error->get_error_code() );
+		} finally {
+			remove_filter( 'content_for_agents_pre_markdown', $invalid );
+		}
+	}
+
+	/**
 	 * Registered block callbacks participate in post conversion.
 	 */
 	public function test_registered_block_callback_converts_post_content(): void {
@@ -204,6 +439,207 @@ class MarkdownConversionTest extends \WP_UnitTestCase {
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( '**Hello agents**', $markdown );
+	}
+
+	/**
+	 * A failed callback aborts conversion instead of returning a partial post.
+	 */
+	public function test_callback_exception_aborts_conversion(): void {
+		$block_name  = 'content-for-agents/failing-callback';
+		$later_calls = 0;
+		Block_Markdown_Registry::register(
+			$block_name,
+			static function (): void {
+				throw new \RuntimeException( 'Sensitive callback detail' );
+			}
+		);
+		Block_Markdown_Registry::register(
+			'content-for-agents/later-callback',
+			static function () use ( &$later_calls ): string {
+				++$later_calls;
+				return 'This block should not run.';
+			}
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/failing-callback /--><!-- wp:content-for-agents/later-callback /-->' )
+		);
+
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_callback_exception' );
+		$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		$this->assertSame( 0, $later_calls );
+	}
+
+	/**
+	 * A dynamic block render failure keeps the block name in the error.
+	 */
+	public function test_dynamic_block_render_exception_has_block_context(): void {
+		$block_name = 'content-for-agents/failing-render';
+		register_block_type(
+			$block_name,
+			array(
+				'render_callback' => static function (): void {
+					throw new \RuntimeException( 'Render failed.' );
+				},
+			)
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/failing-render /-->' )
+		);
+
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_block_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			unregister_block_type( $block_name );
+		}
+	}
+
+	/**
+	 * A shortcode exception keeps the enclosing block name.
+	 */
+	public function test_shortcode_exception_has_block_context(): void {
+		add_shortcode(
+			'cfa_failing_shortcode',
+			static function (): void {
+				throw new \RuntimeException( 'Shortcode failed.' );
+			}
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:shortcode -->[cfa_failing_shortcode]<!-- /wp:shortcode -->' )
+		);
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, 'core/shortcode', 'content_for_agents_block_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			remove_shortcode( 'cfa_failing_shortcode' );
+		}
+	}
+
+	/**
+	 * A native list item render failure keeps its block name during zipping.
+	 */
+	public function test_zipped_list_item_render_exception_has_block_context(): void {
+		Block_Markdown_Registry::register( 'content-for-agents/list-marker', static fn(): string => 'Custom item.' );
+		$post = self::factory()->post->create_and_get(
+			array(
+				'post_content' => '<!-- wp:list --><ul><!-- wp:list-item --><li>Fail here.</li><!-- /wp:list-item --><!-- wp:list-item --><li><!-- wp:content-for-agents/list-marker /--></li><!-- /wp:list-item --></ul><!-- /wp:list -->',
+			)
+		);
+		$fail = static function ( $pre_render, array $block ) {
+			if ( 'core/list-item' === ( $block['blockName'] ?? null ) && str_contains( $block['innerHTML'] ?? '', 'Fail here.' ) ) {
+				throw new \RuntimeException( 'List item render failed.' );
+			}
+			return $pre_render;
+		};
+		add_filter( 'pre_render_block', $fail, 10, 2 );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, 'core/list-item', 'content_for_agents_render_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			remove_filter( 'pre_render_block', $fail, 10 );
+		}
+	}
+
+	/**
+	 * Invalid callback values abort conversion.
+	 */
+	public function test_invalid_callback_value_aborts_conversion(): void {
+		$block_name = 'content-for-agents/invalid-callback';
+		$post       = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/invalid-callback /-->' )
+		);
+
+		Block_Markdown_Registry::register( $block_name, static fn(): array => array( 'unexpected' ) );
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$this->assert_block_error( $error, $block_name, 'content_for_agents_invalid_callback_value' );
+
+		Block_Markdown_Registry::register( $block_name, static fn(): \WP_Error => new \WP_Error( 'conversion_failed' ) );
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$this->assert_block_error( $error, $block_name, 'conversion_failed' );
+	}
+
+	/**
+	 * A child error propagates through wrapper conversion without partial Markdown.
+	 */
+	public function test_child_error_propagates_through_wrapper(): void {
+		$block_name = 'content-for-agents/failing-child';
+		Block_Markdown_Registry::register( $block_name, static fn(): \WP_Error => new \WP_Error( 'child_failed' ) );
+		$post = self::factory()->post->create_and_get(
+			array(
+				'post_content' => '<!-- wp:group --><div class="wp-block-group">Before.<!-- wp:content-for-agents/failing-child /-->After.</div><!-- /wp:group -->',
+			)
+		);
+
+		$converter = new Markdown_Converter();
+		foreach ( array( $converter->blocks_to_markdown( parse_blocks( $post->post_content ), $post ), $converter->post_to_markdown( $post ) ) as $error ) {
+			$this->assert_block_error( $error, $block_name, 'child_failed' );
+		}
+	}
+
+	/**
+	 * A callback that delegates to child conversion returns the child's error.
+	 */
+	public function test_delegating_callback_preserves_child_error(): void {
+		$child_name = 'content-for-agents/failing-grandchild';
+		Block_Markdown_Registry::register( $child_name, static fn(): \WP_Error => new \WP_Error( 'child_failed' ) );
+		Block_Markdown_Registry::register(
+			'content-for-agents/delegating-parent',
+			static function ( array $block, \WP_Post $post ): string|\WP_Error {
+				return ( new Markdown_Converter() )->blocks_to_markdown( $block['innerBlocks'] ?? array(), $post );
+			}
+		);
+		$post = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/delegating-parent --><section><!-- wp:content-for-agents/failing-grandchild /--></section><!-- /wp:content-for-agents/delegating-parent -->' )
+		);
+
+		$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+		$this->assert_block_error( $error, $child_name, 'child_failed' );
+	}
+
+	/**
+	 * A failing block output filter aborts conversion with the block context.
+	 */
+	public function test_block_output_filter_failure_aborts_conversion(): void {
+		$block_name = 'content-for-agents/filter-failure';
+		$hook       = 'content_for_agents_block_' . $block_name;
+		$post       = self::factory()->post->create_and_get(
+			array( 'post_content' => '<!-- wp:content-for-agents/filter-failure /-->' )
+		);
+		Block_Markdown_Registry::register( $block_name, static fn(): string => 'Valid callback output' );
+
+		$throwing_filter = static function (): void {
+			throw new \RuntimeException( 'Sensitive filter detail' );
+		};
+		add_filter( $hook, $throwing_filter );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$cause = $this->assert_block_error( $error, $block_name, 'content_for_agents_filter_exception' );
+			$this->assertInstanceOf( \RuntimeException::class, $cause->get_error_data() );
+		} finally {
+			remove_filter( $hook, $throwing_filter );
+		}
+
+		$invalid_filter = static fn(): array => array( 'unexpected' );
+		add_filter( $hook, $invalid_filter );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$this->assert_block_error( $error, $block_name, 'content_for_agents_invalid_filter_value' );
+		} finally {
+			remove_filter( $hook, $invalid_filter );
+		}
+
+		$error_filter = static fn(): \WP_Error => new \WP_Error( 'conversion_failed' );
+		add_filter( $hook, $error_filter );
+		try {
+			$error = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$this->assert_block_error( $error, $block_name, 'conversion_failed' );
+		} finally {
+			remove_filter( $hook, $error_filter );
+		}
 	}
 
 	/**
@@ -1948,5 +2384,23 @@ MARKDOWN
 		);
 
 		return ( new Markdown_Converter() )->post_to_markdown( $post_id );
+	}
+
+	/**
+	 * Assert a block failure and return its WP_Error cause.
+	 *
+	 * @param mixed  $error      Converter result.
+	 * @param string $block_name Expected block name.
+	 * @param string $cause_code Expected cause code.
+	 * @return \WP_Error Cause of the block failure.
+	 */
+	private function assert_block_error( $error, string $block_name, string $cause_code ): \WP_Error {
+		$this->assertWPError( $error );
+		$this->assertSame( 'content_for_agents_block_conversion_failed', $error->get_error_code() );
+		$data = $error->get_error_data();
+		$this->assertSame( $block_name, $data['block_name'] );
+		$this->assertInstanceOf( \WP_Error::class, $data['cause'] );
+		$this->assertSame( $cause_code, $data['cause']->get_error_code() );
+		return $data['cause'];
 	}
 }

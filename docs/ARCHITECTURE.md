@@ -29,7 +29,7 @@ flowchart TD
 ## Markdown response statistics
 
 `Markdown_Response::serve()` queues sampled MC Stats after access checks and
-response preparation. Both URL methods share this path. The sampled response
+response preparation. Both URL forms and the Accept route share this path. The sampled response
 records a served counter. When `Markdown_Converter` invokes at least one block
 callback, the same pixel also includes a callback-used counter. The converter
 records this during its existing block traversal, so statistics do not parse
@@ -132,5 +132,27 @@ converting the body, places the result before that body, and serves the response
 Private responses receive no-store headers; eligible public responses may be
 cached by VIP's edge cache.
 
+The response uses three separate `Post_Context` scopes:
+
+| Phase                            | Location                                               | Why it needs the selected post in WordPress globals                                                                                                                              |
+| -------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Filtered title                   | `Markdown_Response::get_response_title()`              | A `the_title` filter may use or change global `$post`, even though `get_the_title()` receives the post explicitly. The result supplies the default H1 and response title.        |
+| Body conversion                  | `Markdown_Converter::post_to_markdown()`               | The pre-Markdown filter, block rendering, shortcodes, and block callbacks may use template globals. This scope also supports direct converter calls outside an endpoint request. |
+| Frontmatter and response filters | `Markdown_Response::build_content()`, after conversion | Excerpt and frontmatter filters, the after-Markdown filter, and the prefix filter may use template globals.                                                                      |
+
+`Post_Context` in `includes/class-post-context.php` saves the caller's template
+globals, assigns `$post`, calls `setup_postdata()`, and restores the exact prior
+state in `finally` blocks. The scopes are separate because a callback in one
+phase can change global `$post`. For example, a title filter can switch it to a
+different post; a single context around the whole response would then let the
+frontmatter excerpt use that other post. The endpoint selects the requested
+post but does not establish these contexts.
+
 Direct calls to `post_to_markdown()` return the body. They do not build
 frontmatter or run `content_for_agents_after_markdown`.
+
+At a post's normal URL, the plugin selects Markdown when the Accept value
+contains the lowercase `text/markdown` string. This also matches `q=0` and
+quoted parameters, but not mixed-case media types. The choice differs from
+normal HTTP content negotiation so each shared cache variant has a consistent
+response format on the supported hosting platform.
