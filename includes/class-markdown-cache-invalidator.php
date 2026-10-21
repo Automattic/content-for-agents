@@ -2,7 +2,7 @@
 /**
  * Markdown cache invalidator.
  *
- * Hooks into post lifecycle events to clear cached markdown documents.
+ * Hooks into post lifecycle events to purge VIP edge-cache URLs.
  *
  * @package Content_For_Agents
  */
@@ -10,7 +10,7 @@
 namespace Content_For_Agents;
 
 /**
- * Invalidates markdown document cache when posts are saved, trashed, or deleted.
+ * Purges Markdown edge-cache URLs when posts are saved, trashed, or deleted.
  *
  * @package Content_For_Agents
  */
@@ -93,7 +93,7 @@ class Markdown_Cache_Invalidator {
 	 * Queue the public URLs before a status, slug, or parent change replaces them.
 	 *
 	 * VIP sends these purges on shutdown, after the update. The save_post hook
-	 * still clears the object cache and queues the current URLs.
+	 * queues the current URLs.
 	 *
 	 * @param int $post_id Existing post ID.
 	 */
@@ -143,7 +143,7 @@ class Markdown_Cache_Invalidator {
 	public function invalidate_old_parent( int $post_id, \WP_Post $after, \WP_Post $before ): void {
 		if ( post_type_supports( $after->post_type, 'content-for-agents' )
 			&& $before->post_parent && $before->post_parent !== $after->post_parent ) {
-			self::clear_post_cache( (int) $before->post_parent );
+			self::purge_post_edge_cache( (int) $before->post_parent );
 		}
 	}
 
@@ -177,7 +177,7 @@ class Markdown_Cache_Invalidator {
 	/**
 	 * Clear related public documents in bounded batches.
 	 *
-	 * The first 100 have object caches cleared and VIP edge purges queued.
+	 * The first 100 have VIP edge purges queued.
 	 * VIP Cron Control handles remaining batches through the WordPress cron API
 	 * so a taxonomy or profile edit does not process thousands of posts in one save.
 	 * VIP deduplicates URL requests and sends them asynchronously on shutdown.
@@ -246,9 +246,9 @@ class Markdown_Cache_Invalidator {
 	}
 
 	/**
-	 * Clear cache for a post (delete/trash).
+	 * Purge edge cache for a post (delete/trash).
 	 *
-	 * Also clears the parent's cache when the post is a child.
+	 * Also purges the parent's Markdown URLs when the post is a child.
 	 *
 	 * @param int $post_id Post ID.
 	 */
@@ -265,22 +265,20 @@ class Markdown_Cache_Invalidator {
 		if ( $post_id <= 0 ) {
 			return;
 		}
-		self::clear_post_cache( $post_id );
+		self::purge_post_edge_cache( $post_id );
 
 		$parent_id = wp_get_post_parent_id( $post_id );
 		if ( 0 !== $parent_id ) {
-			self::clear_post_cache( $parent_id );
+			self::purge_post_edge_cache( $parent_id );
 		}
 	}
 
 	/**
-	 * Clear object cache and all VIP edge-cache variants for a post.
+	 * Purge all VIP edge-cache variants for a post.
 	 *
 	 * @param int $post_id Post ID.
 	 */
-	private static function clear_post_cache( int $post_id ): void {
-		Markdown_Response::delete_cache( $post_id );
-
+	private static function purge_post_edge_cache( int $post_id ): void {
 		if ( ! function_exists( 'wpvip_purge_edge_cache_for_url' ) ) {
 			return;
 		}

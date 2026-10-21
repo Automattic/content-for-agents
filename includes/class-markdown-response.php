@@ -16,16 +16,6 @@ namespace Content_For_Agents;
 class Markdown_Response {
 
 	/**
-	 * Cache group for markdown document output.
-	 */
-	const CACHE_GROUP = 'content_for_agents_doc';
-
-	/**
-	 * Cache TTL (1 hour).
-	 */
-	const CACHE_TTL = 3600;
-
-	/**
 	 * Output markdown response for a post.
 	 *
 	 * Sends appropriate headers and outputs the full markdown body with frontmatter.
@@ -47,25 +37,15 @@ class Markdown_Response {
 			wp_die( esc_html__( 'Content not found.', 'content-for-agents' ), '', array( 'response' => 404 ) );
 		}
 
-		// Shared caches must contain only anonymous, public, non-preview output.
 		$cacheable = Markdown_Access::can_cache( $post );
-		$cache_key = 'markdown_' . $post->ID;
-		$content   = $cacheable ? wp_cache_get( $cache_key, self::CACHE_GROUP ) : false;
 		$title     = self::get_response_title( $post );
-
-		if ( ! is_string( $content ) || '' === $content ) {
-			$content = self::build_content( $post, $title );
-			if ( is_wp_error( $content ) ) {
-				Markdown_Conversion_Logger::log( $content, $post->ID );
-				nocache_headers();
-				wp_die( esc_html__( 'Markdown could not be generated.', 'content-for-agents' ), '', array( 'response' => 500 ) );
-				return;
-			}
-
-			if ( $cacheable ) {
-				// phpcs:ignore WordPressVIPMinimum.Performance.LowExpiryCacheTime.CacheTimeUndetermined -- CACHE_TTL is one hour.
-				wp_cache_set( $cache_key, $content, self::CACHE_GROUP, self::CACHE_TTL );
-			}
+		$converter = new Markdown_Converter();
+		$content   = self::build_content( $post, $title, $converter );
+		if ( is_wp_error( $content ) ) {
+			Markdown_Conversion_Logger::log( $content, $post->ID );
+			nocache_headers();
+			wp_die( esc_html__( 'Markdown could not be generated.', 'content-for-agents' ), '', array( 'response' => 500 ) );
+			return;
 		}
 
 		$canonical_url  = get_permalink( $post );
@@ -77,6 +57,8 @@ class Markdown_Response {
 			nocache_headers();
 			header( 'Cache-Control: private, no-store, max-age=0' );
 		}
+
+		( new Markdown_Stats() )->record_served( $converter->used_block_callback() );
 
 		// This is the complete non-HTML response. Stop the WordPress request after
 		// writing it so template rendering and later hooks cannot append output.
@@ -101,16 +83,18 @@ class Markdown_Response {
 	}
 
 	/**
-	 * Build the uncached response, including frontmatter and filtered body.
+	 * Build the response, including frontmatter and filtered body.
 	 *
-	 * @param \WP_Post $post  Post being rendered.
-	 * @param string   $title Normalized WordPress post title.
+	 * @param \WP_Post                $post      Post being rendered.
+	 * @param string                  $title     Normalized WordPress post title.
+	 * @param Markdown_Converter|null $converter Converter used for this response.
 	 * @return string|\WP_Error Complete Markdown document or a conversion failure.
 	 */
-	private static function build_content( \WP_Post $post, string $title ): string|\WP_Error {
+	private static function build_content( \WP_Post $post, string $title, ?Markdown_Converter $converter = null ): string|\WP_Error {
 		$context = null;
 		try {
-			$markdown_body = ( new Markdown_Converter() )->post_to_markdown( $post );
+			$converter     = $converter ?? new Markdown_Converter();
+			$markdown_body = $converter->post_to_markdown( $post );
 			if ( is_wp_error( $markdown_body ) ) {
 				return $markdown_body;
 			}
@@ -178,18 +162,15 @@ class Markdown_Response {
 	 * @param string $slug           URL-safe slug used for the filename.
 	 * @param int    $token_count    Estimated token count.
 	 * @param string $content_signal Content-Signal header value.
-	 * @param int    $cache_ttl      Cache max-age in seconds. 0 (default) uses self::CACHE_TTL.
 	 */
-	public static function send_headers( string $title, string $canonical_url, string $slug, int $token_count, string $content_signal = '', int $cache_ttl = 0 ) {
+	public static function send_headers( string $title, string $canonical_url, string $slug, int $token_count, string $content_signal = '' ) {
 		$escaped_title = addcslashes( str_replace( array( "\r", "\n" ), ' ', $title ), '"\\' );
 		$filename      = sanitize_file_name( '' !== $slug ? $slug : 'document' ) . '.md';
-		$ttl           = $cache_ttl > 0 ? $cache_ttl : self::CACHE_TTL;
 
 		header( 'Content-Type: text/markdown; charset=utf-8' );
 		send_nosniff_header();
 		header( 'X-Robots-Tag: noindex' );
 		header( 'X-Markdown-Tokens: ' . $token_count );
-		header( 'Cache-Control: public, max-age=' . $ttl );
 
 		if ( '' !== $content_signal ) {
 			header( 'Content-Signal: ' . $content_signal );
@@ -244,14 +225,5 @@ class Markdown_Response {
 		}
 
 		return implode( ', ', $parts );
-	}
-
-	/**
-	 * Delete cached markdown document for a post.
-	 *
-	 * @param int $post_id Post ID.
-	 */
-	public static function delete_cache( $post_id ) {
-		wp_cache_delete( 'markdown_' . $post_id, self::CACHE_GROUP );
 	}
 }

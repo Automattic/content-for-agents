@@ -20,6 +20,13 @@ use WP_Error;
  * @package Content_For_Agents
  */
 class Markdown_Converter {
+	/** Whether this converter invoked a registered block callback. */
+	private bool $used_block_callback = false;
+
+	/** Whether a block callback ran during this conversion. */
+	public function used_block_callback(): bool {
+		return $this->used_block_callback;
+	}
 
 	/**
 	 * Convert post content to Markdown.
@@ -28,7 +35,8 @@ class Markdown_Converter {
 	 * @return string|WP_Error Markdown content or a conversion failure.
 	 */
 	public function post_to_markdown( $post ) {
-		$post_object = get_post( $post );
+		$this->used_block_callback = false;
+		$post_object               = get_post( $post );
 		if ( ! $post_object || ! post_type_supports( $post_object->post_type, 'content-for-agents' ) ) {
 			return '';
 		}
@@ -93,7 +101,8 @@ class Markdown_Converter {
 				$callback = Block_Markdown_Registry::get( $block_name );
 				if ( $callback ) {
 					try {
-						$block_md = call_user_func( $callback, $block, $post );
+						$block_md                  = call_user_func( $callback, $block, $post );
+						$this->used_block_callback = true;
 					} catch ( \Throwable $error ) {
 						$cause = new WP_Error( 'content_for_agents_callback_exception', 'Block callback threw an exception.', $error );
 						return $this->block_conversion_error( $block_name, $cause );

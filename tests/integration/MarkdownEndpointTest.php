@@ -23,9 +23,9 @@ require_once __DIR__ . '/support/class-testable-markdown-endpoint.php';
 class MarkdownEndpointTest extends \WP_UnitTestCase {
 
 	/**
-	 * Failed block conversion returns a 500 without caching partial Markdown.
+	 * Failed block conversion returns a 500 without a body.
 	 */
-	public function test_callback_failure_returns_500_without_caching_partial_markdown(): void {
+	public function test_callback_failure_returns_500_without_body(): void {
 		Block_Markdown_Registry::register(
 			'content-for-agents/endpoint-failure',
 			static function (): void {
@@ -38,13 +38,13 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 				'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/endpoint-failure /-->',
 			)
 		);
-		$this->assert_500_without_cache( $post );
+		$this->assert_500_without_body( $post );
 	}
 
 	/**
-	 * A thrown response filter failure also returns a generic uncached 500.
+	 * A thrown response filter failure also returns a generic 500 without a body.
 	 */
-	public function test_response_exception_returns_500_without_caching(): void {
+	public function test_response_exception_returns_500_without_body(): void {
 		$post = self::factory()->post->create_and_get(
 			array(
 				'post_status'  => 'publish',
@@ -56,16 +56,16 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		};
 		add_filter( 'content_for_agents_after_markdown', $fail );
 		try {
-			$this->assert_500_without_cache( $post );
+			$this->assert_500_without_body( $post );
 		} finally {
 			remove_filter( 'content_for_agents_after_markdown', $fail );
 		}
 	}
 
 	/**
-	 * Invalid Markdown filter values return a generic uncached 500.
+	 * Invalid Markdown filter values return a generic 500 without a body.
 	 */
-	public function test_invalid_markdown_filter_values_return_500_without_caching(): void {
+	public function test_invalid_markdown_filter_values_return_500_without_body(): void {
 		$post    = self::factory()->post->create_and_get(
 			array(
 				'post_status'  => 'publish',
@@ -76,7 +76,7 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 		foreach ( array( 'content_for_agents_pre_markdown', 'content_for_agents_after_markdown', 'content_for_agents_markdown_prefix' ) as $hook ) {
 			add_filter( $hook, $invalid );
 			try {
-				$this->assert_500_without_cache( $post );
+				$this->assert_500_without_body( $post );
 			} finally {
 				remove_filter( $hook, $invalid );
 			}
@@ -84,13 +84,11 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Verify a failed document is neither served nor saved to the shared cache.
+	 * Verify a failed document is not served.
 	 *
 	 * @param \WP_Post $post Post that will fail conversion.
 	 */
-	private function assert_500_without_cache( \WP_Post $post ): void {
-		wp_cache_delete( 'markdown_' . $post->ID, Markdown_Response::CACHE_GROUP );
-
+	private function assert_500_without_body( \WP_Post $post ): void {
 		$die_handler = function () {
 			return function ( $message, $title, $args ): void {
 				$this->assertSame( 500, $args['response'] );
@@ -109,8 +107,6 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 			$this->assertSame( '', ob_get_clean() );
 			remove_filter( 'wp_die_handler', $die_handler );
 		}
-
-		$this->assertFalse( wp_cache_get( 'markdown_' . $post->ID, Markdown_Response::CACHE_GROUP ) );
 	}
 
 	/**
@@ -994,38 +990,6 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 			),
 			$urls
 		);
-	}
-
-	/**
-	 * Saving a child clears its cached Markdown and its parent's cached Markdown.
-	 */
-	public function test_saving_child_invalidates_parent_and_child_markdown(): void {
-		$parent_id = self::factory()->post->create(
-			array(
-				'post_type'   => 'page',
-				'post_status' => 'publish',
-			)
-		);
-		$child_id  = self::factory()->post->create(
-			array(
-				'post_type'   => 'page',
-				'post_status' => 'publish',
-				'post_parent' => $parent_id,
-			)
-		);
-		$group     = Markdown_Response::CACHE_GROUP;
-		wp_cache_set( 'markdown_' . $parent_id, 'Parent Markdown', $group );
-		wp_cache_set( 'markdown_' . $child_id, 'Child Markdown', $group );
-
-		wp_update_post(
-			array(
-				'ID'         => $child_id,
-				'post_title' => 'Updated child',
-			)
-		);
-
-		$this->assertFalse( wp_cache_get( 'markdown_' . $child_id, $group ) );
-		$this->assertFalse( wp_cache_get( 'markdown_' . $parent_id, $group ) );
 	}
 
 	/**

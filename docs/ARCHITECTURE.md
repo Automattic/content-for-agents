@@ -8,9 +8,7 @@ and callback registration, see the [plugin guide](PLUGIN-GUIDE.md).
 ```mermaid
 flowchart TD
     A[Markdown request] --> B[Check WordPress and plugin access]
-    B --> C{Shared response cached?}
-    C -- Yes --> Z[Serve Markdown]
-    C -- No --> D[content_for_agents_pre_markdown]
+    B --> D[content_for_agents_pre_markdown]
     D -- Returns a string --> J[Markdown body]
     D -- Returns null --> E[Parse post_content into blocks]
     E --> F{Freeform content?}
@@ -24,9 +22,20 @@ flowchart TD
     J --> M[Build frontmatter from post and body]
     M --> N[Apply content_for_agents_after_markdown to body]
     N --> O[Filter default title prefix]
-    O --> P[Join frontmatter and body; cache if allowed]
+    O --> P[Join frontmatter and body]
     P --> Z
 ```
+
+## Markdown response statistics
+
+`Markdown_Response::serve()` queues sampled MC Stats after access checks and
+response preparation. Both URL forms and the Accept route share this path. The sampled response
+records a served counter. When `Markdown_Converter` invokes at least one block
+callback, the same pixel also includes a callback-used counter. The converter
+records this during its existing block traversal, so statistics do not parse
+the post again. One random sampling decision applies to both counters. VIP's
+edge cache may serve public responses without running WordPress, so those
+requests are outside these application counters.
 
 ## Choosing a path for each block
 
@@ -119,8 +128,9 @@ as breaks inside headings or inline code.
 parsing. `Frontmatter` is built from the post and converted body, then
 `content_for_agents_after_markdown` can alter the served body. `Markdown_Response`
 passes the default post-title H1 to `content_for_agents_markdown_prefix` after
-converting the body, places the result before that body, and caches the response
-only when shared caching is allowed.
+converting the body, places the result before that body, and serves the response.
+Private responses receive no-store headers; eligible public responses may be
+cached by VIP's edge cache.
 
 The response uses three separate `Post_Context` scopes:
 
