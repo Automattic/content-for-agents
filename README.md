@@ -22,12 +22,31 @@ See [attribution](docs/NOTICE.md) and the [GPL license](LICENSE).
 - Advertises Markdown alternatives on supported HTML pages.
 - Applies WordPress permissions to private, draft, preview, and
   password-protected content. Authenticated and password-authorized responses
-  are never stored in the shared cache.
+  send private, no-store headers.
 - Purges affected Markdown URLs when content changes.
-- Records block callback coverage when supported posts are published or their coverage changes on VIP.
+- Records sampled Markdown usage and block callback usage through MC Stats on production VIP sites.
 - Publishes Content-Signal values in Markdown headers and `robots.txt`.
 - Exposes a public block callback registry and provider-neutral filters for
   integrations.
+
+## Analytics on WordPress VIP
+
+When enabled on a production WordPress VIP site, the plugin sends two sampled
+counters through VIP's MC Stats. Analytics are disabled on non-VIP sites and
+VIP sandbox environments. The plugin has no analytics setting.
+
+| Counter                                  | When it is sent                                                                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `content-for-agents-markdown-served`     | A sampled Markdown response reaches WordPress and is served through either endpoint.                                    |
+| `content-for-agents-block-callback-used` | The same sampled response invoked one or more registered block Markdown callbacks. Multiple callbacks still count once. |
+
+Each counter's value is the VIP customer site ID (`FILES_CLIENT_SITE_ID`). The
+plugin sends no post IDs, URLs, content, block names, or user IDs. Each origin
+response is sampled independently at one in ten; responses served entirely by
+VIP's edge cache do not reach the plugin and are not counted. Authorized
+private and preview responses can increment these site-level counters. See the
+[analytics implementation](includes/class-markdown-stats.php) and
+[WordPress VIP privacy policy](https://wpvip.com/privacy/).
 
 ## Installation
 

@@ -8,9 +8,7 @@ and callback registration, see the [plugin guide](PLUGIN-GUIDE.md).
 ```mermaid
 flowchart TD
     A[Markdown request] --> B[Check WordPress and plugin access]
-    B --> C{Shared response cached?}
-    C -- Yes --> Z[Serve Markdown]
-    C -- No --> D[content_for_agents_pre_markdown]
+    B --> D[content_for_agents_pre_markdown]
     D -- Returns a string --> J[Markdown body]
     D -- Returns null --> E[Parse post_content into blocks]
     E --> F{Freeform content?}
@@ -24,44 +22,20 @@ flowchart TD
     J --> M[Build frontmatter from post and body]
     M --> N[Apply content_for_agents_after_markdown to body]
     N --> O[Filter default title prefix]
-    O --> P[Join frontmatter and body; cache if allowed]
+    O --> P[Join frontmatter and body]
     P --> Z
 ```
 
-## Publication-time block telemetry
+## Markdown response statistics
 
-`Post_Block_Telemetry` runs on `wp_after_insert_post`, independently of Markdown
-requests. It skips unsupported or unpublished posts and published updates whose
-content is unchanged. On publication it parses the saved content once; on a
-published content edit it parses the previous and current content to compare
-counts. It walks named blocks, including nested blocks, and checks
-`Block_Markdown_Registry` without rendering blocks or running callbacks. The
-Block Editor's client-side tree cannot determine which PHP Markdown callbacks
-are registered, and the server save hook supplies post objects rather than a
-parsed block tree.
-
-The counts use `parse_blocks()` so they agree with the Markdown converter. A
-local synthetic benchmark with an in-memory telemetry client measured about
-0.1 ms for publication and 0.2 ms for a content edit at 100 blocks; at 5,000
-blocks, about 4.7 ms and 9.6 ms. Metadata-only edits skip parsing. WordPress's
-streaming `WP_Block_Processor` was modestly faster, but it counted some
-malformed block markup differently from `parse_blocks()`. Keeping the same
-parser avoids reporting blocks that the converter would not process. These
-measurements exclude the VIP telemetry client's event-queue cost.
-
-For example, consider an orphan closing delimiter before a custom block:
-
-```html
-<!-- /wp:acme/other -->
-<!-- wp:acme/card /-->
-```
-
-A counter using `WP_Block_Processor::next_block()` skips the closer and counts
-the `acme/card` block. `parse_blocks()` stops at the orphan closer and returns
-that content as freeform, so the named block count is zero. This one-versus-zero
-difference also appeared in a local malformed-markup test. Since the Markdown
-converter uses `parse_blocks()`, telemetry uses it too so both interpret the
-saved content the same way.
+`Markdown_Response::serve()` queues sampled MC Stats after access checks and
+response preparation. Both URL methods share this path. The sampled response
+records a served counter. When `Markdown_Converter` invokes at least one block
+callback, the same pixel also includes a callback-used counter. The converter
+records this during its existing block traversal, so statistics do not parse
+the post again. One random sampling decision applies to both counters. VIP's
+edge cache may serve public responses without running WordPress, so those
+requests are outside these application counters.
 
 ## Choosing a path for each block
 
@@ -154,8 +128,9 @@ as breaks inside headings or inline code.
 parsing. `Frontmatter` is built from the post and converted body, then
 `content_for_agents_after_markdown` can alter the served body. `Markdown_Response`
 passes the default post-title H1 to `content_for_agents_markdown_prefix` after
-converting the body, places the result before that body, and caches the response
-only when shared caching is allowed.
+converting the body, places the result before that body, and serves the response.
+Private responses receive no-store headers; eligible public responses may be
+cached by VIP's edge cache.
 
 Direct calls to `post_to_markdown()` return the body. They do not build
 frontmatter or run `content_for_agents_after_markdown`.

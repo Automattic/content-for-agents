@@ -43,7 +43,6 @@ class Bootstrap {
 
 		new Markdown_Endpoint( $this->loader );
 		new Markdown_Cache_Invalidator( $this->loader );
-		new Post_Block_Telemetry( $this->loader );
 		new Discovery( $this->loader );
 		new Robots_Txt( $this->loader );
 	}

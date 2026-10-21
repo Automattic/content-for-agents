@@ -12,29 +12,24 @@ callbacks can supply content.
 
 ## Content and discovery
 
-### Block callback coverage telemetry
+### Markdown response statistics
 
-When a supported post enters the `publish` status, or its block counts change
-while it remains published, the plugin records one
-`contentforagents_post_block_callback_coverage` event through the VIP
-mu-plugins telemetry library, if available. Republish after another status
-also records an event. Changes to metadata or content that leave both counts
-unchanged do not record an event. The event includes `post_type`, `post_id`,
-`blog_id`, `total_blocks`, and
-`blocks_with_custom_callbacks`. The plugin supplies `plugin_version` globally;
-the VIP library supplies its environment and multisite properties.
+The [README analytics notice](../README.md#analytics-on-wordpress-vip) describes
+the counters and data sent for VIP client review before enabling the plugin.
 
-The counts include named blocks in saved `post_content`, including nested
-blocks. Freeform HTML has no block name and is excluded. A block counts as
-having a custom callback when its name is present in
-`Block_Markdown_Registry`. This check does not render content or execute
-callbacks, so it reports registration rather than actual callback execution.
-No post content or block attributes are sent.
+On production VIP sites, the plugin samples one in ten successful Markdown
+responses. It sends `content-for-agents-markdown-served` through MC Stats for
+every sampled origin response from either URL form. If the converter invokes
+one or more registered block callbacks, it also sends
+`content-for-agents-block-callback-used` in the same pixel. Several callback
+invocations in one post still produce one callback counter. Both counters use
+the same sample, so their ratio estimates the share of origin responses that
+used a block callback. Neither counter contains post content, attributes, or
+identifiers beyond the VIP site ID required by MC Stats.
 
-Events use the current WordPress user when one exists. Scheduled publication
-can run without a current user; in that case, the plugin records as the post
-author when the author is a valid user, then restores the previous user. An
-event is skipped when neither user is available.
+Sampling uses an independent random decision for each response. Application
+statistics cannot count responses fulfilled entirely by VIP's edge cache. The
+plugin does not cache converted documents in the WordPress object cache.
 
 ### URLs and access
 
@@ -89,7 +84,7 @@ add_filter(
 ```
 
 These filters can restrict access and caching, but cannot grant access that
-WordPress denies. Integrations must invalidate cached Markdown when their
+WordPress denies. Integrations must purge affected VIP edge URLs when their
 access rules change.
 
 ### Conversion
@@ -152,9 +147,9 @@ example.
 
 ## Extend the base
 
-All PHP classes live in `Content_For_Agents`. Public hooks, the
-Content-Signal option, and cache groups use `content_for_agents` or
-`content-for-agents` identifiers.
+All PHP classes live in `Content_For_Agents`. Public hooks and the
+Content-Signal option use `content_for_agents` or `content-for-agents`
+identifiers.
 
 Register a block callback before `init` priority 5. Block types can be
 registered through WordPress independently of the Markdown callback:
@@ -209,9 +204,8 @@ Public hooks:
 - `content_for_agents_can_serve_markdown` receives the post and a `response` or
   `discovery` context. Return `false` to deny access; it cannot grant access.
 - `content_for_agents_can_cache_markdown` receives the post. Return `false` to
-  keep visitor-specific output out of the shared cache. This is checked in
-  `Markdown_Access::can_cache()` before `Markdown_Response` reads or writes its
-  document cache.
+  send private, no-store headers for visitor-specific output. This is checked
+  in `Markdown_Access::can_cache()` before `Markdown_Response` sends headers.
 - `content_for_agents_frontmatter` receives the post. Return the metadata array;
   replace its `authors` entry to provide custom bylines.
 - `content_for_agents_markdown_prefix` receives the default title H1, the post,
@@ -327,9 +321,9 @@ When related data changes, integrations identify the affected article IDs and ca
 \Content_For_Agents\Markdown_Cache_Invalidator::invalidate_post( $article_id );
 ```
 
-The call clears the article and its parent, and purges their Markdown paths
-and query endpoints. Moving a child also clears its former parent. Category,
-tag, and author display-name changes clear affected documents in batches of
+The call purges the article and its parent's Markdown paths and query endpoints.
+Moving a child also purges its former parent. Category, tag, and author
+display-name changes purge affected URLs in batches of
 100; WordPress schedules later batches through VIP Cron Control. VIP queues
 and deduplicates URL purges, so edge-cache refresh is not immediate. Call
 before permanent deletion if the old permalink must be purged. A callback

@@ -657,38 +657,6 @@ class MarkdownEndpointTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Saving a child clears its cached Markdown and its parent's cached Markdown.
-	 */
-	public function test_saving_child_invalidates_parent_and_child_markdown(): void {
-		$parent_id = self::factory()->post->create(
-			array(
-				'post_type'   => 'page',
-				'post_status' => 'publish',
-			)
-		);
-		$child_id  = self::factory()->post->create(
-			array(
-				'post_type'   => 'page',
-				'post_status' => 'publish',
-				'post_parent' => $parent_id,
-			)
-		);
-		$group     = Markdown_Response::CACHE_GROUP;
-		wp_cache_set( 'markdown_' . $parent_id, 'Parent Markdown', $group );
-		wp_cache_set( 'markdown_' . $child_id, 'Child Markdown', $group );
-
-		wp_update_post(
-			array(
-				'ID'         => $child_id,
-				'post_title' => 'Updated child',
-			)
-		);
-
-		$this->assertFalse( wp_cache_get( 'markdown_' . $child_id, $group ) );
-		$this->assertFalse( wp_cache_get( 'markdown_' . $parent_id, $group ) );
-	}
-
-	/**
 	 * A static front page uses the query endpoint with plain permalinks.
 	 */
 	public function test_get_url_returns_query_endpoint_for_plain_permalink_static_front_page(): void {

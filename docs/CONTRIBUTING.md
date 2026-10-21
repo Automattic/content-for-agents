@@ -60,11 +60,11 @@ content-for-agents.php
   -> Markdown_Response: access and response behavior are applied
   -> Markdown_Converter: blocks are resolved and converted
   -> Frontmatter: document metadata is assembled
-  -> Markdown_Response: final body filter, headers, and caching
+  -> Markdown_Response: final body filter and headers
 ```
 
-On content and metadata changes, `Markdown_Cache_Invalidator` clears cached
-documents and purges affected URLs separately from the request flow.
+On content and metadata changes, `Markdown_Cache_Invalidator` purges affected
+VIP edge URLs separately from the request flow.
 
 The main responsibilities are divided as follows:
 
@@ -77,6 +77,7 @@ The main responsibilities are divided as follows:
 | Document metadata               | `Frontmatter`                                                                    |
 | Discovery                       | `Discovery`, `Robots_Txt`                                                        |
 | Cache invalidation              | `Markdown_Cache_Invalidator`                                                     |
+| Analytics                       | `Markdown_Stats`                                                                 |
 
 Public PHP classes are direct members of the `Content_For_Agents` namespace.
 Integration plugins use their own namespaces and autoloaders. Preserve the
