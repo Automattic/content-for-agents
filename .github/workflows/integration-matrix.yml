@@ -8,18 +8,15 @@ permissions:
 
 jobs:
   integration:
-    name: Integration (PHP ${{ matrix.php }}, WP ${{ matrix.wordpress.core }})
+    name: Integration (PHP ${{ matrix.php }}, WP ${{ matrix.wordpress }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php: ["8.2", "8.3", "8.4", "8.5"]
-        wordpress:
-          - { core: "7.0-branch", phpunit: "7.0" }
-          - { core: "7.1-branch", phpunit: "7.1" }
-          - { core: "master", phpunit: "trunk" }
+        wordpress: ["7.0-branch", "7.1-branch", "master"]
     env:
-      WP_ENV_CORE: WordPress/WordPress#${{ matrix.wordpress.core }}
+      WP_ENV_CORE: WordPress/WordPress#${{ matrix.wordpress }}
       WP_ENV_PHP_VERSION: ${{ matrix.php }}
 
     steps:
@@ -54,9 +51,19 @@ jobs:
       # wordpress-develop names its release branches without "-branch".
       - name: Match the PHPUnit library to the WordPress branch
         run: |
+          core_ref='${{ matrix.wordpress }}'
+          if [[ "$core_ref" == master ]]; then
+            phpunit_ref=trunk
+          elif [[ "$core_ref" =~ ^[0-9]+\.[0-9]+-branch$ ]]; then
+            phpunit_ref="${core_ref%-branch}"
+          else
+            echo "Unsupported WordPress core ref: $core_ref" >&2
+            exit 1
+          fi
+
           path="$(npx wp-env status --config=.wp-env.test.json --json | jq -r .installPath)"
           dir="$path/WordPress-PHPUnit"
-          git -C "$dir" fetch --depth 1 origin '${{ matrix.wordpress.phpunit }}'
+          git -C "$dir" fetch --depth 1 origin "$phpunit_ref"
           git -C "$dir" checkout --force FETCH_HEAD
 
       - name: Run integration tests
