@@ -71,16 +71,21 @@ For a post with plain permalinks, the Markdown URL is
 permalinks. A static front page uses `/?markdown=true`, leaving `/markdown`
 available for a normal page. If a child page occupies a post's `/markdown`
 path, that post uses `?markdown=true` instead. See the
-[plugin guide](docs/PLUGIN-GUIDE.md) for
-access rules, preview behavior, and extension points.
+[plugin guide](docs/PLUGIN-GUIDE.md) for access and preview behavior, and the
+[site setup guide](docs/SITE-SETUP.md) for extension points.
 
 If you are working from a source checkout, follow the development setup in the
 [contributor guide](docs/CONTRIBUTING.md).
 
 ## Documentation
 
-- [Plugin behavior and extension contracts](docs/PLUGIN-GUIDE.md)
+For site owners and customers:
+
+- [Using Content for Agents](docs/PLUGIN-GUIDE.md)
+- [Adapt Content for Agents to your site](docs/SITE-SETUP.md)
+
+For implementation and maintenance:
+
 - [Conversion architecture](docs/ARCHITECTURE.md)
-- [Site integrations](docs/INTEGRATIONS.md)
 - [Development and contributing](docs/CONTRIBUTING.md)
 - [Attribution](docs/NOTICE.md)
