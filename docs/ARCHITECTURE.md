@@ -1,158 +1,99 @@
-# Conversion architecture
+# How the Markdown response is built
 
-Content for Agents starts with a WordPress post and produces a Markdown body.
-The endpoint then adds frontmatter and response headers. This page explains
-where block callbacks and HTML conversion fit in that flow. For public hooks
-and callback registration, see the [plugin guide](PLUGIN-GUIDE.md).
-
-```mermaid
-flowchart TD
-    A[Markdown request] --> B[Check WordPress and plugin access]
-    B --> D[content_for_agents_pre_markdown]
-    D -- Returns a string --> J[Markdown body]
-    D -- Returns null --> E[Parse post_content into blocks]
-    E --> F{Freeform content?}
-    F -- Yes --> I[Prepare content and convert HTML to Markdown]
-    F -- No --> K{Registered callback?}
-    K -- Yes --> S[Use callback Markdown]
-    K -- No --> L[Block HTML fallback]
-    L --> I
-    S --> J
-    I --> J
-    J --> M[Build frontmatter from post and body]
-    M --> N[Apply content_for_agents_after_markdown to body]
-    N --> O[Filter default title prefix]
-    O --> P[Join frontmatter and body]
-    P --> Z
-```
-
-## Markdown response statistics
-
-`Markdown_Response::serve()` queues sampled MC Stats after access checks and
-response preparation. Both URL forms and the Accept route share this path. The sampled response
-records a served counter. When `Markdown_Converter` invokes at least one block
-callback, the same pixel also includes a callback-used counter. The converter
-records this during its existing block traversal, so statistics do not parse
-the post again. One random sampling decision applies to both counters. VIP's
-edge cache may serve public responses without running WordPress, so those
-requests are outside these application counters.
-
-## Choosing a path for each block
-
-`Markdown_Converter` parses the stored `post_content` with `parse_blocks()`.
-It processes each block in order:
-
-1. Freeform or Classic Editor content has no block name. It goes through the
-   HTML conversion path. Block-level callbacks do not run for it.
-2. A callback in `Block_Markdown_Registry` receives the parsed block and post.
-   Its return value is Markdown, including an empty string that suppresses the
-   block. This path runs the `content_for_agents_block_{block-name}` filter.
-3. Otherwise, the block takes the HTML fallback described below.
-
-If a wrapper contains a descendant with its own Markdown strategy, the
-converter walks its `innerContent` fragments and child blocks in source order.
-This lets a child callback run without losing HTML owned by the wrapper.
-When a parent has a registered callback, that callback owns the subtree:
-it chooses whether to include children and can pass selected `innerBlocks` to
-`blocks_to_markdown()` to invoke their callbacks. Without a parent callback,
-descendant strategies drive the `innerContent` walk. Integrations must use
-visibility rules that agree with WordPress's HTML rendering; a parent renderer
-that independently hides children needs a corresponding parent Markdown
-callback.
-The converter joins the resulting Markdown fragments after each path completes.
-Callback output is not sent through HTML conversion.
-
-## How the HTML fallback handles blocks
+This document explains the conversion decisions that matter when a site adds
+custom blocks or filters. For the hooks and their return values, see
+[Adapt Content for Agents to your site](SITE-SETUP.md).
 
 ```mermaid
 flowchart TD
-    A[No direct Markdown strategy] --> B{Descendant needs its own strategy?}
-    B -- Yes --> C[Walk innerContent in source order]
-    C --> D[Convert wrapper-owned HTML fragments]
-    C --> E[Convert child blocks through their own strategies]
-    D --> F[Join Markdown fragments]
-    E --> F
-    B -- No --> G{Block type}
-    G -- Ordinary or embed block --> H[render_block]
-    G -- Shortcode block --> I[Use its shortcode text]
-    H --> K[Prepare HTML or shortcode text]
-    I --> K
-    K --> T{Standalone unresolved shortcode?}
-    T -- Yes --> M[Markdown for this block]
-    T -- No --> L[HTML to Markdown converter]
-    F --> M[Markdown for this block]
-    L --> N{Readable core/embed preview?}
-    N -- Yes --> O[Convert preview and retain caption]
-    N -- No --> M
-    O --> M
+    A[Markdown request] --> B{May this visitor read the post?}
+    B -- No --> X[Stop]
+    B -- Yes --> C{Site supplies a Markdown body?}
+    C -- Yes --> G[Use that body]
+    C -- No --> D[Parse stored post content]
+    D --> E{Block callback registered?}
+    E -- Yes --> F[Use callback Markdown]
+    E -- No --> H[Convert freeform or rendered HTML]
+    F --> G
+    H --> G
+    G --> I[Build metadata from post and body]
+    I --> J[Apply body and title-prefix filters]
+    J --> K[Send Markdown and response headers]
 ```
 
-For an ordinary block, `render_block()` produces the HTML that WordPress would
-render, including output from a dynamic block's render callback. The plugin
-then converts that HTML. A `core/shortcode` block starts with its shortcode
-text instead; registered shortcodes run during HTML preparation. If an
-unregistered shortcode has a recognizable URL, it becomes a link. Otherwise
-it remains literal. For `core/embed`, the plugin can use WordPress's readable
-embed preview and retain its caption; when there is no readable preview, the
-original URL remains available.
+## Which content becomes Markdown
 
-The descendant path avoids rendering a wrapper as one HTML string when a child
-needs a Markdown callback. `innerContent` contains the wrapper's HTML fragments
-and placeholders for its children. The converter processes those in order:
-wrapper fragments take the HTML path, while child blocks take their own
-callback or fallback path. `core/quote` reapplies quote markers to
-the combined result; `core/list` keeps native list markers and nesting.
-The plugin does not run `the_content` over the whole post.
+`Markdown_Converter` reads the post's stored `post_content` and parses its
+blocks in order. It does not apply `the_content` to the entire post. The
+`content_for_agents_pre_markdown` filter can supply a complete body before
+block parsing, for example when a post type stores its own Markdown.
 
-## The HTML conversion path
+For each parsed block, the converter makes these choices:
 
-Before converting HTML, the plugin runs registered shortcodes and WordPress
-typography and smiley filters. An unregistered shortcode with a recognizable
-URL becomes a link; otherwise its text remains. `HTML_To_Markdown_Converter`
-then walks WordPress HTML API tokens. `Markdown_Inline_Buffer` collects text and
-inline format boundaries before choosing Markdown syntax. `Markdown_Output_Writer`
-assembles paragraphs, quotes, and lists after their children are complete. The
-converter handles code and table cells. If the tree-aware HTML Processor stops
-at unsupported markup, the converter retries with the Tag Processor so later
-content is retained.
+1. Freeform content, including Classic Editor HTML between blocks, goes through
+   HTML conversion. It has no block name, so a block callback cannot handle it.
+2. A registered callback receives the parsed block and post. Its Markdown is
+   used directly, then passed to `content_for_agents_block_{block-name}`. Empty
+   output omits the block. Neither result goes through HTML conversion.
+3. Without a callback, the converter uses built-in handling or renders the
+   block and converts its HTML. Dynamic block render callbacks can therefore
+   run during a Markdown request.
 
-The block writer follows the deferred block model in
-[html-to-md](https://github.com/dmsnell/html-to-md), while keeping prose
-unwrapped. The converter targets CommonMark with GFM tables and strikethrough.
-It uses inline HTML where Markdown cannot preserve the source structure, such
-as breaks inside headings or inline code.
+A parent callback owns the whole block subtree. It must include any children
+it wants in the result, and can call `blocks_to_markdown()` for selected child
+blocks. When the parent has no callback but a child needs its own strategy,
+the converter walks the parent's saved `innerContent` in order. It converts
+the parent's HTML fragments and processes each child separately. This keeps a
+child callback available without discarding the parent's surrounding content.
 
-## Assembling the response
+If the parent renders only some children on the HTML page, its Markdown
+callback should apply the same rule. A child callback cannot determine which
+children an unrelated parent renderer chose to hide.
 
-`content_for_agents_pre_markdown` can replace the entire body before block
-parsing. `Frontmatter` is built from the post and converted body, then
-`content_for_agents_after_markdown` can alter the served body. `Markdown_Response`
-passes the default post-title H1 to `content_for_agents_markdown_prefix` after
-converting the body, places the result before that body, and serves the response.
-Private responses receive no-store headers; eligible public responses may be
-cached by VIP's edge cache.
+## What the HTML path does
 
-The response uses three separate `Post_Context` scopes:
+The HTML path prepares registered shortcodes and WordPress typography before
+conversion. An unregistered shortcode with a recognizable URL becomes a link;
+otherwise it remains literal. Ordinary blocks use `render_block()`, while a
+Shortcode block starts with its shortcode text. Core embeds use a readable
+WordPress preview when available, or retain their URL.
 
-| Phase                            | Location                                               | Why it needs the selected post in WordPress globals                                                                                                                              |
-| -------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Filtered title                   | `Markdown_Response::get_response_title()`              | A `the_title` filter may use or change global `$post`, even though `get_the_title()` receives the post explicitly. The result supplies the default H1 and response title.        |
-| Body conversion                  | `Markdown_Converter::post_to_markdown()`               | The pre-Markdown filter, block rendering, shortcodes, and block callbacks may use template globals. This scope also supports direct converter calls outside an endpoint request. |
-| Frontmatter and response filters | `Markdown_Response::build_content()`, after conversion | Excerpt and frontmatter filters, the after-Markdown filter, and the prefix filter may use template globals.                                                                      |
+The converter targets CommonMark, with GFM tables and strikethrough. It keeps
+headings, lists, links, images, quotes, captions, and code readable. Audio,
+video, and iframe sources generally become links instead of interactive
+players. It uses inline HTML when Markdown cannot preserve the original
+structure. The implementation draws on the deferred block model in
+[html-to-md](https://github.com/dmsnell/html-to-md).
 
-`Post_Context` in `includes/class-post-context.php` saves the caller's template
-globals, assigns `$post`, calls `setup_postdata()`, and restores the exact prior
-state in `finally` blocks. The scopes are separate because a callback in one
-phase can change global `$post`. For example, a title filter can switch it to a
-different post; a single context around the whole response would then let the
-frontmatter excerpt use that other post. The endpoint selects the requested
-post but does not establish these contexts.
+## How the document is assembled
 
-Direct calls to `post_to_markdown()` return the body. They do not build
-frontmatter or run `content_for_agents_after_markdown`.
+The endpoint first checks WordPress and plugin access rules. It then gets the
+filtered post title and converts the body. Frontmatter is built from the post
+and that body. Only after frontmatter is built does
+`content_for_agents_after_markdown` change the body. The default post-title
+heading then passes through `content_for_agents_markdown_prefix`, and the
+endpoint joins frontmatter, prefix, and body. A description derived from the
+body therefore reflects the body **before** the after-Markdown filter. An
+integration that needs a different description should use
+`content_for_agents_frontmatter`.
 
-At a post's normal URL, the plugin selects Markdown when the Accept value
-contains the lowercase `text/markdown` string. This also matches `q=0` and
-quoted parameters, but not mixed-case media types. The choice differs from
-normal HTTP content negotiation so each shared cache variant has a consistent
-response format on the supported hosting platform.
+Invalid callback output, a `WP_Error`, or an exception stops conversion. The
+endpoint returns a generic HTTP 500 instead of serving or caching a partial
+document. Direct `post_to_markdown()` callers receive the body or a
+`WP_Error`; they do not get frontmatter or the after-Markdown filter.
+
+The endpoint sends the canonical HTML link, token estimate, Content-Signal,
+and `noindex` response headers with the document. Eligible public responses
+may be served from VIP's edge cache. Private and visitor-specific responses
+need private, no-store headers; see the [access and cache rules](SITE-SETUP.md#access-and-cache-rules).
+
+## Why the post context is reset
+
+WordPress and site callbacks may read global `$post` even when they receive a
+post argument. `Post_Context` temporarily sets the requested post and restores
+the caller's globals afterward. The title, body conversion, and response
+assembly each use a separate context. This prevents a title filter that
+changes global `$post` from making later metadata or excerpts use another
+post. Direct converter calls also get the correct context.
+
+For the sampled usage counters, see [Analytics on WordPress VIP](../README.md#analytics-on-wordpress-vip).

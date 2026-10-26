@@ -142,10 +142,10 @@ their original form so the tests can compare them with generated Markdown.
 ## Common change recipes
 
 - To support a custom block, use the callback registry described in
-  [Extend the base](PLUGIN-GUIDE.md#extend-the-base).
+  [Implementation reference](SITE-SETUP.md#implementation-reference-for-your-site-team).
 - To expose another post type, add the `content-for-agents` support flag.
 - When related data changes, identify the affected post IDs and use the public
-  cache invalidators described in [Cache invalidation](PLUGIN-GUIDE.md#cache-invalidation).
+  cache invalidators described in [Access and cache rules](SITE-SETUP.md#access-and-cache-rules).
 - Provider-specific compatibility belongs in a separately loaded plugin, not
   in the provider-neutral base.
 
