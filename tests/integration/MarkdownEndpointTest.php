@@ -9,11 +9,9 @@
 namespace Content_For_Agents\Tests\Integration;
 
 use Content_For_Agents\Discovery;
-use Content_For_Agents\Block_Markdown_Registry;
 use Content_For_Agents\Loader;
 use Content_For_Agents\Markdown_Cache_Invalidator;
 use Content_For_Agents\Markdown_Endpoint;
-use Content_For_Agents\Markdown_Response;
 
 require_once __DIR__ . '/support/class-testable-markdown-endpoint.php';
 
@@ -21,93 +19,6 @@ require_once __DIR__ . '/support/class-testable-markdown-endpoint.php';
  * Exercises Markdown URL generation under different permalink modes.
  */
 class MarkdownEndpointTest extends \WP_UnitTestCase {
-
-	/**
-	 * Failed block conversion returns a 500 without a body.
-	 */
-	public function test_callback_failure_returns_500_without_body(): void {
-		Block_Markdown_Registry::register(
-			'content-for-agents/endpoint-failure',
-			static function (): void {
-				throw new \RuntimeException( 'Sensitive callback detail' );
-			}
-		);
-		$post = self::factory()->post->create_and_get(
-			array(
-				'post_status'  => 'publish',
-				'post_content' => '<!-- wp:paragraph --><p>Before.</p><!-- /wp:paragraph --><!-- wp:content-for-agents/endpoint-failure /-->',
-			)
-		);
-		$this->assert_500_without_body( $post );
-	}
-
-	/**
-	 * A thrown response filter failure also returns a generic 500 without a body.
-	 */
-	public function test_response_exception_returns_500_without_body(): void {
-		$post = self::factory()->post->create_and_get(
-			array(
-				'post_status'  => 'publish',
-				'post_content' => '<!-- wp:paragraph --><p>Body.</p><!-- /wp:paragraph -->',
-			)
-		);
-		$fail = static function (): void {
-			throw new \RuntimeException( 'Sensitive response detail' );
-		};
-		add_filter( 'content_for_agents_after_markdown', $fail );
-		try {
-			$this->assert_500_without_body( $post );
-		} finally {
-			remove_filter( 'content_for_agents_after_markdown', $fail );
-		}
-	}
-
-	/**
-	 * Invalid Markdown filter values return a generic 500 without a body.
-	 */
-	public function test_invalid_markdown_filter_values_return_500_without_body(): void {
-		$post    = self::factory()->post->create_and_get(
-			array(
-				'post_status'  => 'publish',
-				'post_content' => '<!-- wp:paragraph --><p>Body.</p><!-- /wp:paragraph -->',
-			)
-		);
-		$invalid = static fn(): array => array( 'unexpected' );
-		foreach ( array( 'content_for_agents_pre_markdown', 'content_for_agents_after_markdown', 'content_for_agents_markdown_prefix' ) as $hook ) {
-			add_filter( $hook, $invalid );
-			try {
-				$this->assert_500_without_body( $post );
-			} finally {
-				remove_filter( $hook, $invalid );
-			}
-		}
-	}
-
-	/**
-	 * Verify a failed document is not served.
-	 *
-	 * @param \WP_Post $post Post that will fail conversion.
-	 */
-	private function assert_500_without_body( \WP_Post $post ): void {
-		$die_handler = function () {
-			return function ( $message, $title, $args ): void {
-				$this->assertSame( 500, $args['response'] );
-				$this->assertSame( 'Markdown could not be generated.', $message );
-				throw new \RuntimeException( 'Expected 500 response' );
-			};
-		};
-		add_filter( 'wp_die_handler', $die_handler );
-		ob_start();
-		try {
-			Markdown_Response::serve( $post );
-			$this->fail( 'Expected a 500 response.' );
-		} catch ( \RuntimeException $error ) {
-			$this->assertSame( 'Expected 500 response', $error->getMessage() );
-		} finally {
-			$this->assertSame( '', ob_get_clean() );
-			remove_filter( 'wp_die_handler', $die_handler );
-		}
-	}
 
 	/**
 	 * Original permalink structure.

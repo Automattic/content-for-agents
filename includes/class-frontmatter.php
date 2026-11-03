@@ -37,12 +37,18 @@ class Frontmatter {
 			'categories'  => $this->get_categories( $post ),
 			'tags'        => $this->get_tags( $post ),
 		);
-
-		$data = apply_filters( 'content_for_agents_frontmatter', $data, $post );
-
-		$data = array_filter( $data, fn( $v ) => '' !== $v && array() !== $v && null !== $v );
-
-		$yaml = $this->to_yaml( $data );
+		try {
+			$filtered = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_frontmatter', $data, $post ) );
+			if ( ! is_array( $filtered ) ) {
+				$error = is_wp_error( $filtered ) ? $filtered : new \WP_Error( 'content_for_agents_invalid_frontmatter', 'Frontmatter filter returned a non-array value.' );
+				Markdown_Conversion_Logger::log( $error, $post->ID );
+				$filtered = $data;
+			}
+			$yaml = $this->to_yaml( array_filter( $filtered, fn( $v ) => '' !== $v && array() !== $v && null !== $v ) );
+		} catch ( \Throwable $error ) {
+			Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_frontmatter_exception', 'Frontmatter override failed; using default metadata.', $error ), $post->ID );
+			$yaml = $this->to_yaml( array_filter( $data, fn( $v ) => '' !== $v && array() !== $v && null !== $v ) );
+		}
 		return "---\n" . $yaml . "---\n\n";
 	}
 

@@ -18,15 +18,18 @@ class Post_Context {
 	private bool $restored = false;
 
 	/**
-	 * Save the caller's globals and set up the requested post.
+	 * Save globals, optionally setting up the requested post.
 	 *
-	 * @param \WP_Post $post Post being rendered.
+	 * @param \WP_Post|null $post Post being rendered, or null to capture current globals.
 	 */
-	public function __construct( \WP_Post $post ) {
+	public function __construct( ?\WP_Post $post = null ) {
 		foreach ( self::GLOBAL_KEYS as $key ) {
 			if ( array_key_exists( $key, $GLOBALS ) ) {
 				$this->saved[ $key ] = $GLOBALS[ $key ];
 			}
+		}
+		if ( null === $post ) {
+			return;
 		}
 
 		try {
@@ -35,6 +38,21 @@ class Post_Context {
 		} catch ( \Throwable $error ) {
 			$this->restore();
 			throw $error;
+		}
+	}
+
+	/**
+	 * Run extension code without changing the surrounding post globals.
+	 *
+	 * @param callable $callback Extension code to execute.
+	 * @return mixed Callback result; exceptions propagate after restoring globals.
+	 */
+	public static function preserve( callable $callback ) {
+		$context = new self();
+		try {
+			return $callback();
+		} finally {
+			$context->restore();
 		}
 	}
 

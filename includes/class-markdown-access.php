@@ -70,7 +70,17 @@ final class Markdown_Access {
 		 * @param \WP_Post $post    Post being checked.
 		 * @param string   $context Access context: response or discovery.
 		 */
-		return (bool) apply_filters( 'content_for_agents_can_serve_markdown', true, $post, $context );
+		try {
+			$allowed = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_can_serve_markdown', true, $post, $context ) );
+			if ( is_wp_error( $allowed ) ) {
+				Markdown_Conversion_Logger::log( $allowed, $post->ID );
+				return false;
+			}
+			return (bool) $allowed;
+		} catch ( \Throwable $error ) {
+			Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_access_policy_exception', 'Markdown access policy failed; denying access.', $error ), $post->ID );
+			return false;
+		}
 	}
 
 	/**
@@ -96,6 +106,16 @@ final class Markdown_Access {
 		 * @param bool     $cacheable Whether shared caching is allowed.
 		 * @param \WP_Post $post      Post being checked.
 		 */
-		return (bool) apply_filters( 'content_for_agents_can_cache_markdown', true, $post );
+		try {
+			$cacheable = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_can_cache_markdown', true, $post ) );
+			if ( is_wp_error( $cacheable ) ) {
+				Markdown_Conversion_Logger::log( $cacheable, $post->ID );
+				return false;
+			}
+			return (bool) $cacheable;
+		} catch ( \Throwable $error ) {
+			Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_cache_policy_exception', 'Markdown cache policy failed; disabling shared caching.', $error ), $post->ID );
+			return false;
+		}
 	}
 }

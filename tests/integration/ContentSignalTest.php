@@ -16,6 +16,26 @@ use Content_For_Agents\Robots_Txt;
  * Covers site-wide Content-Signal overrides shared by Markdown and robots.txt.
  */
 class ContentSignalTest extends \WP_UnitTestCase {
+	/** A failed signal filter preserves the saved policy rather than dropping it. */
+	public function test_failed_signal_filter_preserves_saved_values(): void {
+		update_option(
+			'content_for_agents_content_signal',
+			array(
+				'ai-train' => 'no',
+				'search'   => 'yes',
+			)
+		);
+		$filter = static function (): void {
+			throw new \RuntimeException( 'Signal override failed' );
+		};
+		add_filter( 'content_for_agents_content_signal_values', $filter );
+		try {
+			$this->assertSame( 'ai-train=no, search=yes', Markdown_Response::get_content_signal_header() );
+		} finally {
+			remove_filter( 'content_for_agents_content_signal_values', $filter );
+		}
+	}
+
 
 	/**
 	 * A code-level filter overrides the stored values in both output paths.

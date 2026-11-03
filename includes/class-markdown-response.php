@@ -42,19 +42,28 @@ class Markdown_Response {
 		$converter = new Markdown_Converter();
 		$content   = self::build_content( $post, $title, $converter );
 		if ( is_wp_error( $content ) ) {
-			Markdown_Conversion_Logger::log( $content, $post->ID );
 			nocache_headers();
 			wp_die( esc_html__( 'Markdown could not be generated.', 'content-for-agents' ), '', array( 'response' => 500 ) );
 			return;
 		}
 
-		$canonical_url  = get_permalink( $post );
-		$token_count    = Markdown_Converter::estimate_tokens( $content );
-		$content_signal = self::get_content_signal_header();
-
-		self::send_headers( $title, $canonical_url, $post->post_name, $token_count, $content_signal );
+		try {
+			self::send_headers( $title, get_permalink( $post ), $post->post_name, Markdown_Converter::estimate_tokens( $content ), self::get_content_signal_header( $post->ID ) );
+		} catch ( \Throwable $error ) {
+			Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_header_exception', 'Markdown header preparation failed.', $error ), $post->ID );
+			header( 'Content-Type: text/markdown; charset=utf-8' );
+			header( 'X-Content-Type-Options: nosniff' );
+			header( 'X-Robots-Tag: noindex' );
+			header( 'Content-Disposition: inline; filename="document.md"' );
+		}
 		if ( ! $cacheable ) {
-			nocache_headers();
+			try {
+				nocache_headers();
+			} catch ( \Throwable $error ) {
+				Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_nocache_exception', 'No-cache header filtering failed; using default headers.', $error ), $post->ID );
+				header_remove( 'Last-Modified' );
+				header( 'Expires: Wed, 11 Jan 1984 05:00:00 GMT' );
+			}
 			header( 'Cache-Control: private, no-store, max-age=0' );
 		}
 
@@ -73,12 +82,16 @@ class Markdown_Response {
 	 * @return string Normalized post title.
 	 */
 	private static function get_response_title( \WP_Post $post ): string {
-		$context = new Post_Context( $post );
+		$context = null;
 		try {
-			$title = html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+			$context = new Post_Context( $post );
+			$title   = html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 			return trim( preg_replace( '/\s+/u', ' ', $title ) ?? $title );
+		} catch ( \Throwable $error ) {
+			Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_title_exception', 'Title filtering failed.', $error ), $post->ID );
+			return html_entity_decode( wp_strip_all_tags( $post->post_title ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 		} finally {
-			$context->restore();
+			$context?->restore();
 		}
 	}
 
@@ -88,39 +101,43 @@ class Markdown_Response {
 	 * @param \WP_Post                $post      Post being rendered.
 	 * @param string                  $title     Normalized WordPress post title.
 	 * @param Markdown_Converter|null $converter Converter used for this response.
-	 * @return string|\WP_Error Complete Markdown document or a conversion failure.
+	 * @return string|\WP_Error Complete document or a post-level conversion failure.
 	 */
 	private static function build_content( \WP_Post $post, string $title, ?Markdown_Converter $converter = null ): string|\WP_Error {
+		$converter     = $converter ?? new Markdown_Converter();
+		$markdown_body = $converter->post_to_markdown( $post );
+		if ( is_wp_error( $markdown_body ) ) {
+			return $markdown_body;
+		}
 		$context = null;
+		$yaml    = "---\n---\n\n";
 		try {
-			$converter     = $converter ?? new Markdown_Converter();
-			$markdown_body = $converter->post_to_markdown( $post );
-			if ( is_wp_error( $markdown_body ) ) {
-				return $markdown_body;
+			$context = new Post_Context( $post );
+			try {
+				$yaml = Post_Context::preserve( static fn() => ( new Frontmatter() )->build( $post, $markdown_body ) );
+			} catch ( \Throwable $error ) {
+				Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_frontmatter_exception', 'Frontmatter generation failed.', $error ), $post->ID );
 			}
-
-			// Conversion restores its context; response filters still need this post.
-			$context       = new Post_Context( $post );
-			$yaml          = ( new Frontmatter() )->build( $post, $markdown_body );
-			$markdown_body = apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post );
-			if ( is_wp_error( $markdown_body ) ) {
-				return $markdown_body;
+			try {
+				$filtered = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_after_markdown', $markdown_body, $post ) );
+			} catch ( \Throwable $error ) {
+				$filtered = new \WP_Error( 'content_for_agents_after_markdown_exception', 'Body filter failed.', $error );
 			}
-			if ( ! is_string( $markdown_body ) ) {
-				return new \WP_Error( 'content_for_agents_invalid_after_markdown_value', 'Markdown body filter returned a non-string value.' );
+			if ( is_string( $filtered ) ) {
+				$markdown_body = $filtered;
+			} else {
+				$error = is_wp_error( $filtered ) ? $filtered : new \WP_Error( 'content_for_agents_invalid_after_markdown_value', 'Body filter returned a non-string value.' );
+				Markdown_Conversion_Logger::log( $error, $post->ID );
 			}
-
-			// Build the prefix after conversion so its filter can inspect the final body.
 			$prefix = self::get_markdown_prefix( $title, $post, $markdown_body );
-			if ( is_wp_error( $prefix ) ) {
-				return $prefix;
-			}
-			return $yaml . $prefix . $markdown_body;
 		} catch ( \Throwable $error ) {
-			return new \WP_Error( 'content_for_agents_response_exception', 'Markdown document assembly failed.', $error );
+			$failure = new \WP_Error( 'content_for_agents_response_exception', 'Markdown response setup failed.', $error );
+			Markdown_Conversion_Logger::log( $failure, $post->ID );
+			return $failure;
 		} finally {
 			$context?->restore();
 		}
+		return $yaml . $prefix . $markdown_body;
 	}
 
 	/**
@@ -129,9 +146,9 @@ class Markdown_Response {
 	 * @param string   $title         Normalized WordPress post title.
 	 * @param \WP_Post $post          Post being rendered.
 	 * @param string   $markdown_body Rendered post content.
-	 * @return string|\WP_Error Markdown prefix, including any spacing before the body, or a failure.
+	 * @return string Markdown prefix, including any spacing before the body.
 	 */
-	private static function get_markdown_prefix( string $title, \WP_Post $post, string $markdown_body ): string|\WP_Error {
+	private static function get_markdown_prefix( string $title, \WP_Post $post, string $markdown_body ): string {
 		$markdown_title = '' !== $title ? trim( ( new HTML_To_Markdown_Converter() )->convert( $title ) ) : '';
 		$prefix         = '' !== $markdown_title ? "# $markdown_title\n\n" : '';
 
@@ -145,10 +162,17 @@ class Markdown_Response {
 		 * @param \WP_Post $post          Post being rendered.
 		 * @param string   $markdown_body Converted post content.
 		 */
-		$prefix = apply_filters( 'content_for_agents_markdown_prefix', $prefix, $post, $markdown_body );
-		return is_wp_error( $prefix ) || is_string( $prefix )
-			? $prefix
-			: new \WP_Error( 'content_for_agents_invalid_prefix_value', 'Markdown prefix filter returned a non-string value.' );
+		try {
+			$filtered = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_markdown_prefix', $prefix, $post, $markdown_body ) );
+		} catch ( \Throwable $error ) {
+			$filtered = new \WP_Error( 'content_for_agents_prefix_exception', 'Prefix filter failed.', $error );
+		}
+		if ( is_string( $filtered ) ) {
+			return $filtered;
+		}
+		$error = is_wp_error( $filtered ) ? $filtered : new \WP_Error( 'content_for_agents_invalid_prefix_value', 'Prefix filter returned a non-string value.' );
+		Markdown_Conversion_Logger::log( $error, $post->ID );
+		return $prefix;
 	}
 
 	/**
@@ -183,9 +207,10 @@ class Markdown_Response {
 	/**
 	 * Get the Content-Signal value from site options and code-level overrides.
 	 *
+	 * @param int $post_id Response post ID, or zero outside a post response.
 	 * @return string Header value (e.g. ai-train=yes, search=yes, ai-input=yes).
 	 */
-	public static function get_content_signal_header() {
+	public static function get_content_signal_header( int $post_id = 0 ) {
 		$options = get_option(
 			'content_for_agents_content_signal',
 			array(
@@ -203,7 +228,20 @@ class Markdown_Response {
 		 *
 		 * @param mixed $options Stored values, or the defaults when none are saved.
 		 */
-		$options = apply_filters( 'content_for_agents_content_signal_values', $options );
+		$stored = $options;
+		try {
+			$options = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_content_signal_values', $options ) );
+			if ( is_wp_error( $options ) ) {
+				Markdown_Conversion_Logger::log( $options, $post_id );
+				$options = $stored;
+			} elseif ( ! is_array( $options ) && is_array( $stored ) ) {
+				Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_signal_value', 'Content-Signal filter returned a non-array value.' ), $post_id );
+				$options = $stored;
+			}
+		} catch ( \Throwable $error ) {
+			Markdown_Conversion_Logger::log( new \WP_Error( 'content_for_agents_signal_filter_exception', 'Content-Signal filtering failed.', $error ), $post_id );
+			$options = $stored;
+		}
 
 		if ( ! is_array( $options ) ) {
 			return '';

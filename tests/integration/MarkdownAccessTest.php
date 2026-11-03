@@ -35,6 +35,49 @@ class MarkdownAccessTest extends \WP_UnitTestCase {
 	}
 
 	/**
+	 * Failed access policies deny both serving and discovery, with diagnostics.
+	 *
+	 * @dataProvider policy_failure_provider
+	 * @param callable $filter Failing policy callback.
+	 */
+	public function test_failed_access_policy_denies_response_and_discovery( callable $filter ): void {
+		$post = self::factory()->post->create_and_get( array( 'post_status' => 'publish' ) );
+
+		add_filter( 'content_for_agents_can_serve_markdown', $filter );
+		try {
+			$this->assertFalse( Markdown_Access::can_serve( $post ) );
+			$this->assertFalse( Markdown_Access::can_serve( $post, Markdown_Access::CONTEXT_DISCOVERY ) );
+		} finally {
+			remove_filter( 'content_for_agents_can_serve_markdown', $filter );
+		}
+	}
+
+	/**
+	 * A failing cache policy keeps the response out of shared caches.
+	 *
+	 * @dataProvider policy_failure_provider
+	 * @param callable $filter Failing policy callback.
+	 */
+	public function test_failed_cache_policy_disables_shared_caching( callable $filter ): void {
+		wp_set_current_user( 0 );
+		$post = self::factory()->post->create_and_get( array( 'post_status' => 'publish' ) );
+		add_filter( 'content_for_agents_can_cache_markdown', $filter );
+		try {
+			$this->assertFalse( Markdown_Access::can_cache( $post ) );
+		} finally {
+			remove_filter( 'content_for_agents_can_cache_markdown', $filter );
+		}
+	}
+
+	/** @return array Policy failure callbacks shared by access and caching tests. */
+	public function policy_failure_provider(): array {
+		return array(
+			'exception' => array( static fn() => throw new \RuntimeException( 'Policy failed' ) ),
+			'wp-error'  => array( static fn(): \WP_Error => new \WP_Error( 'policy_failed', 'Policy failed' ) ),
+		);
+	}
+
+	/**
 	 * The access filter receives the discovery context.
 	 */
 	public function test_discovery_context_is_passed_to_access_filter(): void {
