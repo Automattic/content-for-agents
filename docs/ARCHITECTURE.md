@@ -77,14 +77,30 @@ body therefore reflects the body **before** the after-Markdown filter. An
 integration that needs a different description should use
 `content_for_agents_frontmatter`.
 
-Invalid callback output, a `WP_Error`, or an exception stops conversion. The
-endpoint returns a generic HTTP 500 instead of serving or caching a partial
-document. Direct `post_to_markdown()` callers receive the body or a
+Callback failures use rendered-HTML fallback for the entire failed subtree;
+child Markdown callbacks are skipped so the parent renderer retains its
+visibility decisions. A failed block output filter keeps the callback result.
+Dynamic render callbacks are temporarily guarded during HTML rendering so a
+throwing child does not discard its working siblings. The original callbacks
+are restored in `finally`. Other block or fragment failures are omitted.
+
+Pre-Markdown, body, prefix, and frontmatter filter failures are logged and use
+their defaults. If default metadata generation fails, the body remains
+available without frontmatter. Access-policy failures deny Markdown, while
+cache-policy failures disable shared caching.
+
+Critical WordPress post setup, parsing, or URL-normalization failures still
+produce a generic HTTP 500. No alternate block parser or hand-built post globals
+are substituted. Direct `post_to_markdown()` callers receive the body or a
 `WP_Error`; they do not get frontmatter or the after-Markdown filter.
+`blocks_to_markdown()` returns recovered strings. Every encountered failure is
+logged, including repeats; edge-cache hits do not run conversion or logging.
 
 The endpoint sends the canonical HTML link, token estimate, Content-Signal,
 and `noindex` response headers with the document. Eligible public responses
-may be served from VIP's edge cache. Private and visitor-specific responses
+may be served from VIP's edge cache, including recovered responses with omitted
+blocks or fallback content. These remain cached until normal expiry or a purge.
+Private and visitor-specific responses
 need private, no-store headers; see the [access and cache rules](SITE-SETUP.md#access-and-cache-rules).
 
 ## Why the post context is reset
@@ -92,7 +108,11 @@ need private, no-store headers; see the [access and cache rules](SITE-SETUP.md#a
 WordPress and site callbacks may read global `$post` even when they receive a
 post argument. `Post_Context` temporarily sets the requested post and restores
 the caller's globals afterward. The title, body conversion, and response
-assembly each use a separate context. This prevents a title filter that
+assembly each use a separate context. Within those phases, extension hooks and
+HTML preparation also preserve the surrounding globals. Restoration happens
+before recovery continues, so a callback that changes `$post` and then fails
+cannot make fallback rendering read another post. These inner scopes capture
+existing globals without repeating WordPress post setup. This prevents a title filter that
 changes global `$post` from making later metadata or excerpts use another
 post. Direct converter calls also get the correct context.
 

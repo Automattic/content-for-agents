@@ -52,9 +52,12 @@ Markdown into an HTML viewer, that viewer must sanitize it first.
 Review a few representative articles before relying on the output, especially
 ones with custom blocks, embeds, tables, or access restrictions. Compare the
 Markdown with what a reader can see on the HTML page. Embedded media may appear
-as a link instead of an interactive player. If a custom block fails to convert,
-the request returns an error instead of a partial article; ask your site team
-to inspect the failure.
+as a link instead of an interactive player. If a custom conversion fails, the
+plugin falls back to the block's rendered HTML where possible. A block that
+cannot render is omitted, while the rest of the article remains available.
+Failed optional customizations keep the defaults. Ask your site team to inspect
+the logged failure. Access denials and critical WordPress processing failures
+can still prevent a Markdown response.
 
 ## Who can read it
 
@@ -87,6 +90,9 @@ team to plan an integration when your site has:
 The plugin queues VIP edge-cache purges when supported post content changes.
 Changes in separate integration data may need an additional purge from your
 site team. An edge-cached Markdown response may take a little time to refresh.
+Recovered responses can also be cached, including omitted blocks or fallback
+content, until normal expiry or a purge. Requests served from that cache do
+not run conversion or produce new conversion logs.
 
 On production WordPress VIP sites, the plugin samples Markdown requests for
 two site-level usage counters. It does not send post IDs, URLs, or content.

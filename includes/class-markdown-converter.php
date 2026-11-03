@@ -32,7 +32,7 @@ class Markdown_Converter {
 	 * Convert post content to Markdown.
 	 *
 	 * @param int|\WP_Post $post Post ID or post object.
-	 * @return string|WP_Error Markdown content or a conversion failure.
+	 * @return string|WP_Error Markdown content or a post-level conversion failure.
 	 */
 	public function post_to_markdown( $post ) {
 		$this->used_block_callback = false;
@@ -42,8 +42,9 @@ class Markdown_Converter {
 		}
 
 		// Direct converter calls need post globals for block rendering and callbacks.
-		$context = new Post_Context( $post_object );
+		$context = null;
 		try {
+			$context = new Post_Context( $post_object );
 			/**
 			 * Allow plugins to supply pre-built Markdown, bypassing block conversion.
 			 *
@@ -54,23 +55,30 @@ class Markdown_Converter {
 			 * @param string|WP_Error|null $pre Pre-built Markdown, a failure, or null to use default conversion.
 			 * @param \WP_Post    $post_object The post being converted.
 			 */
-			$pre = apply_filters( 'content_for_agents_pre_markdown', null, $post_object );
+			try {
+				$pre = Post_Context::preserve( static fn() => apply_filters( 'content_for_agents_pre_markdown', null, $post_object ) );
+			} catch ( \Throwable $error ) {
+				$pre = new WP_Error( 'content_for_agents_pre_markdown_exception', 'Pre-Markdown filter failed.', $error );
+			}
+			if ( is_string( $pre ) ) {
+				return $pre;
+			}
 			if ( null !== $pre ) {
-				if ( is_wp_error( $pre ) || is_string( $pre ) ) {
-					return $pre;
-				}
-				return new WP_Error( 'content_for_agents_invalid_pre_markdown_value', 'Pre-Markdown filter returned a non-string value.' );
+				$error = is_wp_error( $pre ) ? $pre : new WP_Error( 'content_for_agents_invalid_pre_markdown_value', 'Pre-Markdown filter returned a non-string value.' );
+				Markdown_Conversion_Logger::log( $error, $post_object->ID );
 			}
 
-			$markdown = $this->blocks_to_markdown( parse_blocks( $post_object->post_content ), $post_object );
-			if ( is_wp_error( $markdown ) ) {
-				return $markdown;
-			}
+			$blocks   = parse_blocks( $post_object->post_content );
+			$markdown = $this->blocks_to_markdown( $blocks, $post_object );
 			$markdown = trim( $markdown );
 			// Match WordPress's the_content handling of legacy same-site HTTP URLs.
 			return wp_replace_insecure_home_url( $markdown );
+		} catch ( \Throwable $error ) {
+			$failure = new WP_Error( 'content_for_agents_conversion_exception', 'Post conversion failed.', $error );
+			Markdown_Conversion_Logger::log( $failure, $post_object->ID );
+			return $failure;
 		} finally {
-			$context->restore();
+			$context?->restore();
 		}
 	}
 
@@ -79,14 +87,15 @@ class Markdown_Converter {
 	 *
 	 * @param array    $blocks   Array of parsed block arrays from parse_blocks().
 	 * @param \WP_Post $post     The post being converted.
-	 * @return string|WP_Error Markdown content or a conversion failure.
+	 * @return string Markdown content; failed blocks are omitted.
 	 */
-	public function blocks_to_markdown( array $blocks, \WP_Post $post ): string|WP_Error {
+	public function blocks_to_markdown( array $blocks, \WP_Post $post ): string {
 		$parts     = array();
 		$converter = new HTML_To_Markdown_Converter();
 
 		foreach ( $blocks as $block ) {
 			$block_name = $block['blockName'] ?? null;
+			$context    = new Post_Context();
 			try {
 				// Null blockName = freeform/classic content between blocks.
 				if ( null === $block_name ) {
@@ -100,17 +109,22 @@ class Markdown_Converter {
 				// Dispatch to registered block-level markdown callback.
 				$callback = Block_Markdown_Registry::get( $block_name );
 				if ( $callback ) {
+					$this->used_block_callback = true;
 					try {
-						$block_md                  = call_user_func( $callback, $block, $post );
-						$this->used_block_callback = true;
+						$block_md = Post_Context::preserve( static fn() => call_user_func( $callback, $block, $post ) );
 					} catch ( \Throwable $error ) {
-						$cause = new WP_Error( 'content_for_agents_callback_exception', 'Block callback threw an exception.', $error );
-						return $this->block_conversion_error( $block_name, $cause );
+						$block_md = new WP_Error( 'content_for_agents_callback_exception', 'Block callback threw an exception.', $error );
 					}
 
 					if ( null !== $block_md && ! is_string( $block_md ) ) {
 						$cause = is_wp_error( $block_md ) ? $block_md : new WP_Error( 'content_for_agents_invalid_callback_value', 'Block callback returned a non-string value.' );
-						return $this->block_conversion_error( $block_name, $cause );
+						Markdown_Conversion_Logger::log( $cause, $post->ID, $block_name );
+						// The HTML renderer owns visibility for the entire failed subtree.
+						$block_md = $this->convert_rendered_html( $this->render_block( $block, $post ), $converter );
+						if ( '' !== trim( $block_md ) ) {
+							$parts[] = $block_md;
+						}
+						continue;
 					}
 
 					/**
@@ -123,21 +137,24 @@ class Markdown_Converter {
 					 * @param array    $block    Parsed block array.
 					 * @param \WP_Post $post     The post being converted.
 					 */
+					$default_md = $block_md;
 					try {
-						$block_md = apply_filters(
-							'content_for_agents_block_' . $block_name,
-							$block_md,
-							$block,
-							$post
+						$block_md = Post_Context::preserve(
+							static fn() => apply_filters(
+								'content_for_agents_block_' . $block_name,
+								$block_md,
+								$block,
+								$post
+							)
 						);
 					} catch ( \Throwable $error ) {
-						$cause = new WP_Error( 'content_for_agents_filter_exception', 'Block Markdown filter threw an exception.', $error );
-						return $this->block_conversion_error( $block_name, $cause );
+						$block_md = new WP_Error( 'content_for_agents_filter_exception', 'Block Markdown filter threw an exception.', $error );
 					}
 
 					if ( null !== $block_md && ! is_string( $block_md ) ) {
 						$cause = is_wp_error( $block_md ) ? $block_md : new WP_Error( 'content_for_agents_invalid_filter_value', 'Block Markdown filter returned a non-string value.' );
-						return $this->block_conversion_error( $block_name, $cause );
+						Markdown_Conversion_Logger::log( $cause, $post->ID, $block_name );
+						$block_md = $default_md;
 					}
 
 					if ( null !== $block_md && '' !== trim( $block_md ) ) {
@@ -150,9 +167,6 @@ class Markdown_Converter {
 				if ( ! empty( $inner ) && $this->descendants_require_zipping( $inner ) ) {
 					if ( 'core/quote' === $block_name ) {
 						$inner_md = $this->zip_inner_content( $block, $post, $converter, true );
-						if ( is_wp_error( $inner_md ) ) {
-							return $inner_md;
-						}
 						if ( '' !== trim( $inner_md ) ) {
 							// Prefix the complete ordered content, including blank lines.
 							$inner_md = '> ' . str_replace( "\n", "\n> ", trim( $inner_md ) );
@@ -166,9 +180,6 @@ class Markdown_Converter {
 
 					$separator = 'core/list' === $block_name ? "\n" : "\n\n";
 					$zipped_md = $this->zip_inner_content( $block, $post, $converter, false, $separator );
-					if ( is_wp_error( $zipped_md ) ) {
-						return $zipped_md;
-					}
 					if ( '' !== trim( $zipped_md ) ) {
 						$parts[] = $zipped_md;
 					}
@@ -184,13 +195,18 @@ class Markdown_Converter {
 				}
 
 				// Default: render block to HTML, then convert to markdown.
-				$html = render_block( $block );
+				$html = $this->render_block( $block, $post );
 				$md   = $this->convert_rendered_html( $html, $converter );
 				if ( 'core/embed' === $block_name ) {
 					global $wp_embed;
 					$embed_url = $block['attrs']['url'] ?? '';
 					if ( $wp_embed instanceof \WP_Embed && is_string( $embed_url ) && '' !== $embed_url ) {
-						$resolved_md   = $this->convert_rendered_html( $wp_embed->shortcode( array(), $embed_url ), $converter );
+						try {
+							$resolved_md = $this->convert_rendered_html( $wp_embed->shortcode( array(), $embed_url ), $converter );
+						} catch ( \Throwable $error ) {
+							Markdown_Conversion_Logger::log( new WP_Error( 'content_for_agents_embed_exception', 'Embed preview failed.', $error ), $post->ID, $block_name );
+							$resolved_md = '';
+						}
 						$resolved_text = trim( $resolved_md );
 						if (
 						'' !== $resolved_text
@@ -209,7 +225,9 @@ class Markdown_Converter {
 				}
 			} catch ( \Throwable $error ) {
 				$cause = new WP_Error( 'content_for_agents_block_exception', 'Block conversion threw an exception.', $error );
-				return null === $block_name ? $cause : $this->block_conversion_error( $block_name, $cause );
+				Markdown_Conversion_Logger::log( $cause, $post->ID, $block_name ?? 'freeform' );
+			} finally {
+				$context->restore();
 			}
 		}
 
@@ -217,26 +235,43 @@ class Markdown_Converter {
 	}
 
 	/**
-	 * Add block context to a conversion failure.
+	 * Isolate dynamic render callbacks, including those inside rendered parents.
 	 *
-	 * @param string    $block_name Registered block name.
-	 * @param WP_Error $cause      Returned or normalized failure.
-	 * @return WP_Error Conversion failure.
+	 * Keep WordPress's normal parent rendering and visibility decisions. Temporarily
+	 * guard only callbacks in this subtree and restore them even if rendering fails.
+	 *
+	 * @param array    $block Parsed block.
+	 * @param \WP_Post $post  Response post.
+	 * @return string Rendered HTML.
 	 */
-	private function block_conversion_error( string $block_name, WP_Error $cause ): WP_Error {
-		$context = $cause->get_error_data();
-		if ( 'content_for_agents_block_conversion_failed' === $cause->get_error_code() && is_array( $context ) && ( $context['cause'] ?? null ) instanceof WP_Error ) {
-			return $cause;
+	private function render_block( array $block, \WP_Post $post ): string {
+		$callbacks = array();
+		$pending   = array( $block );
+		try {
+			while ( $pending ) {
+				$current = array_pop( $pending );
+				$name    = $current['blockName'] ?? '';
+				$type    = \WP_Block_Type_Registry::get_instance()->get_registered( $name );
+				if ( $type && $type->is_dynamic() && ! isset( $callbacks[ $name ] ) ) {
+					$callback              = $type->render_callback;
+					$callbacks[ $name ]    = array( $type, $callback );
+					$type->render_callback = function ( ...$args ) use ( $callback, $name, $post ) {
+						try {
+							return call_user_func_array( $callback, $args );
+						} catch ( \Throwable $error ) {
+							Markdown_Conversion_Logger::log( new WP_Error( 'content_for_agents_render_exception', 'Dynamic block rendering failed.', $error ), $post->ID, $name );
+							return '';
+						}
+					};
+				}
+				array_push( $pending, ...( $current['innerBlocks'] ?? array() ) );
+			}
+			return render_block( $block );
+		} finally {
+			foreach ( $callbacks as list( $type, $callback ) ) {
+				$type->render_callback = $callback;
+			}
 		}
-
-		return new WP_Error(
-			'content_for_agents_block_conversion_failed',
-			'Block Markdown conversion failed.',
-			array(
-				'block_name' => $block_name,
-				'cause'      => $cause,
-			)
-		);
 	}
 
 	/**
@@ -248,13 +283,17 @@ class Markdown_Converter {
 	 * @return string Markdown output.
 	 */
 	private function convert_rendered_html( string $html, HTML_To_Markdown_Converter $converter, bool $literal_if_unresolved = false ): string {
-		$linked   = $this->link_unregistered_shortcodes( $html );
-		$prepared = capital_P_dangit( wptexturize( $linked ) );
-		$rendered = convert_smilies( do_shortcode( $prepared ) );
-		if ( $literal_if_unresolved && $linked === $html && $rendered === $prepared ) {
-			return $html;
-		}
-		return $converter->convert( $rendered );
+		return Post_Context::preserve(
+			function () use ( $html, $converter, $literal_if_unresolved ): string {
+				$linked   = $this->link_unregistered_shortcodes( $html );
+				$prepared = capital_P_dangit( wptexturize( $linked ) );
+				$rendered = convert_smilies( do_shortcode( $prepared ) );
+				if ( $literal_if_unresolved && $linked === $html && $rendered === $prepared ) {
+						return $html;
+				}
+				return $converter->convert( $rendered );
+			}
+		);
 	}
 
 	/**
@@ -330,9 +369,9 @@ class Markdown_Converter {
 	 * @param HTML_To_Markdown_Converter $converter        HTML converter.
 	 * @param bool                       $quote_fragments  Strip quote/cite wrappers before converting fragments.
 	 * @param string                     $separator        Markdown separator between owned fragments and children.
-	 * @return string|WP_Error Zipped Markdown or a conversion failure.
+	 * @return string Zipped Markdown.
 	 */
-	private function zip_inner_content( array $block, \WP_Post $post, HTML_To_Markdown_Converter $converter, bool $quote_fragments = false, string $separator = "\n\n" ): string|WP_Error {
+	private function zip_inner_content( array $block, \WP_Post $post, HTML_To_Markdown_Converter $converter, bool $quote_fragments = false, string $separator = "\n\n" ): string {
 		$parts        = array();
 		$inner_blocks = $block['innerBlocks'] ?? array();
 		$inner_index  = 0;
@@ -347,9 +386,6 @@ class Markdown_Converter {
 			if ( null === $fragment ) {
 				if ( isset( $inner_blocks[ $inner_index ] ) ) {
 					$child_md = $this->convert_zipped_child( $inner_blocks[ $inner_index ], $post, $converter, $list_context );
-					if ( is_wp_error( $child_md ) ) {
-						return $child_md;
-					}
 					if ( '' !== trim( $child_md ) ) {
 						$parts[] = $child_md;
 						if ( null !== $list_context ) {
@@ -366,7 +402,12 @@ class Markdown_Converter {
 				$owned_html = (string) preg_replace( '/<!--.*?-->/s', '', $owned_html );
 				$owned_html = (string) preg_replace( '~</?(?:blockquote|cite)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', '', $owned_html );
 			}
-			$owned_md = $this->convert_rendered_html( $owned_html, $converter );
+			try {
+				$owned_md = $this->convert_rendered_html( $owned_html, $converter );
+			} catch ( \Throwable $error ) {
+				Markdown_Conversion_Logger::log( new WP_Error( 'content_for_agents_fragment_exception', 'HTML fragment conversion failed.', $error ), $post->ID, $block['blockName'] ?? 'freeform' );
+				continue;
+			}
 			if ( '' !== trim( $owned_md ) ) {
 				$parts[] = $owned_md;
 			}
@@ -374,9 +415,6 @@ class Markdown_Converter {
 
 		while ( isset( $inner_blocks[ $inner_index ] ) ) {
 			$child_md = $this->convert_zipped_child( $inner_blocks[ $inner_index ], $post, $converter, $list_context );
-			if ( is_wp_error( $child_md ) ) {
-				return $child_md;
-			}
 			if ( '' !== trim( $child_md ) ) {
 				$parts[] = $child_md;
 				if ( null !== $list_context ) {
@@ -396,9 +434,9 @@ class Markdown_Converter {
 	 * @param \WP_Post                   $post      Post being converted.
 	 * @param HTML_To_Markdown_Converter $converter HTML converter.
 	 * @param array|null                 $list_context Parent list state, if applicable.
-	 * @return string|WP_Error Child Markdown or a conversion failure.
+	 * @return string Child Markdown.
 	 */
-	private function convert_zipped_child( array $child, \WP_Post $post, HTML_To_Markdown_Converter $converter, ?array $list_context ): string|WP_Error {
+	private function convert_zipped_child( array $child, \WP_Post $post, HTML_To_Markdown_Converter $converter, ?array $list_context ): string {
 		$is_native_item = null !== $list_context
 			&& 'core/list-item' === ( $child['blockName'] ?? null )
 			&& ! $this->has_custom_markdown_strategy( 'core/list-item' );
@@ -407,17 +445,15 @@ class Markdown_Converter {
 			$tag   = $list_context['ordered'] ? 'ol' : 'ul';
 			$start = $list_context['ordered'] ? ' start="' . $list_context['index'] . '"' : '';
 			try {
-				return $this->convert_rendered_html( '<' . $tag . $start . '>' . render_block( $child ) . '</' . $tag . '>', $converter );
+				return $this->convert_rendered_html( '<' . $tag . $start . '>' . $this->render_block( $child, $post ) . '</' . $tag . '>', $converter );
 			} catch ( \Throwable $error ) {
 				$cause = new WP_Error( 'content_for_agents_render_exception', 'Block rendering threw an exception.', $error );
-				return $this->block_conversion_error( 'core/list-item', $cause );
+				Markdown_Conversion_Logger::log( $cause, $post->ID, 'core/list-item' );
+				return '';
 			}
 		}
 
 		$markdown = $this->blocks_to_markdown( array( $child ), $post );
-		if ( is_wp_error( $markdown ) ) {
-			return $markdown;
-		}
 		if ( ! $is_native_item || '' === trim( $markdown ) ) {
 			return $markdown;
 		}

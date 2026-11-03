@@ -109,11 +109,13 @@ add_action( 'content_for_agents_register_block_callbacks', static function (): v
 ```
 
 The callback receives a parsed block array and the post. Return a Markdown
-string, `''` or `null` to suppress the block, or `WP_Error` to fail conversion.
+string, `''` or `null` to suppress the block, or `WP_Error` to request
+rendered-HTML fallback.
 A callback's result is authoritative, including list markers and children.
 To delegate selected children, call
 `( new \Content_For_Agents\Markdown_Converter() )->blocks_to_markdown( $blocks, $post )`
-and propagate any `WP_Error`. Without a parent callback, the converter can
+which returns a string with any recovered child content. Without a parent
+callback, the converter can
 walk child blocks that need their own Markdown strategy. Keep a parent's
 Markdown visibility consistent with its HTML renderer.
 
@@ -123,23 +125,43 @@ callback's result passes through `content_for_agents_block_{block-name}` with
 the parsed block and post. A missing callback uses the plugin's built-in
 handling or rendered-HTML conversion.
 
-Invalid callback or block-output-filter return types, thrown exceptions, and
-`WP_Error` results stop conversion. The response is a generic HTTP 500 and is
-not cached. Direct `post_to_markdown()` and `blocks_to_markdown()` callers must
-check for `WP_Error` before treating the result as a string.
+Invalid return types, exceptions, and `WP_Error` results from a block callback
+are logged. The fallback renders that entire block as HTML and converts it to
+Markdown. Child Markdown callbacks are skipped in this fallback so the parent
+HTML renderer keeps control of visibility. A failed block output filter keeps
+the callback's original Markdown. A throwing dynamic render callback is omitted
+without discarding its working siblings. Other rendering or conversion errors
+omit the affected block or HTML fragment and continue.
+
+The pre-Markdown filter falls back to normal conversion on failure. Failed body
+and prefix filters keep the unfiltered body and default title heading. Failed
+frontmatter overrides, including unserializable values, keep the default
+metadata. If the default metadata cannot be generated, frontmatter is omitted
+while the heading and body remain available.
+
+`blocks_to_markdown()` returns a string. `post_to_markdown()` returns the body
+or a `WP_Error` for critical WordPress processing failures, such as post setup,
+block parsing, or URL normalization. The endpoint logs these failures and
+returns a generic HTTP 500; it does not substitute a different block parser.
+
+Every encountered failure is logged, including repeats. Logs identify the site,
+post, and failing block when available, with the first underlying `WP_Error`
+message and the exception class and message when applicable. Additional error
+data and stack traces are not logged or included in the Markdown response. PHP
+warnings retain normal WordPress behavior.
 
 ### Filters and actions
 
-| Hook                                       | Contract                                                                                                                                                                                                                                 |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content_for_agents_pre_markdown`          | Receives `null` and the post. Return `null` for normal conversion, a string for the body, or `WP_Error` to stop.                                                                                                                         |
-| `content_for_agents_after_markdown`        | Receives the converted body and post during response assembly. Return a string or `WP_Error`. Direct `post_to_markdown()` calls do not run it.                                                                                           |
-| `content_for_agents_frontmatter`           | Receives the metadata array and post. Return an array. Replace `authors` to change bylines.                                                                                                                                              |
-| `content_for_agents_markdown_prefix`       | Receives the default title heading, post, and converted body. Return Markdown between frontmatter and body, `''` to omit the heading, or `WP_Error` to stop. Include any spacing needed before the body.                                 |
-| `content_for_agents_can_serve_markdown`    | Receives `true`, post, and `response` or `discovery`. Return `false` to veto access. It cannot override WordPress access checks.                                                                                                         |
-| `content_for_agents_can_cache_markdown`    | Receives `true` and post when core rules permit shared caching. Return `false` for private, no-store response headers.                                                                                                                   |
-| `content_for_agents_block_{block-name}`    | Receives a registered callback result, parsed block, and post. Return a string (including `''`) or `null`; empty output suppresses the block and `WP_Error` stops conversion. This filter runs only when a block callback is registered. |
-| `content_for_agents_content_signal_values` | Receives the stored values or defaults. Return an array of site-wide values for `ai-train`, `search`, and `ai-input`, or an empty array to omit the signal.                                                                              |
+| Hook                                       | Contract                                                                                                                                                                                                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content_for_agents_pre_markdown`          | Receives `null` and the post. Return `null` for normal conversion, or a string for the body. Failures are logged and use normal conversion.                                                                                                          |
+| `content_for_agents_after_markdown`        | Receives the converted body and post during response assembly. Return a string; failures keep the unfiltered body. Direct `post_to_markdown()` calls do not run it.                                                                                  |
+| `content_for_agents_frontmatter`           | Receives the metadata array and post. Return an array. Replace `authors` to change bylines. Failures keep default metadata.                                                                                                                          |
+| `content_for_agents_markdown_prefix`       | Receives the default title heading, post, and converted body. Return Markdown between frontmatter and body, or `''` to omit the heading. Failures are logged and keep the default heading. Include any spacing needed before the body.               |
+| `content_for_agents_can_serve_markdown`    | Receives `true`, post, and `response` or `discovery`. Return `false` to veto access. It cannot override WordPress access checks. Exceptions and `WP_Error` deny access and are logged.                                                               |
+| `content_for_agents_can_cache_markdown`    | Receives `true` and post when core rules permit shared caching. Return `false` for private, no-store response headers. Exceptions and `WP_Error` disable shared caching and are logged.                                                              |
+| `content_for_agents_block_{block-name}`    | Receives a registered callback result, parsed block, and post. Return a string (including `''`) or `null`; empty output suppresses the block. Failures keep the original callback result. This filter runs only when a block callback is registered. |
+| `content_for_agents_content_signal_values` | Receives the stored values or defaults. Return an array of site-wide values for `ai-train`, `search`, and `ai-input`, or an empty array to omit the signal. Failures keep the stored/default values.                                                 |
 
 `content_for_agents_register_block_callbacks` is the registration action used
 above. `content_for_agents_set_context` and `content_for_agents_clear_context`
@@ -167,6 +189,15 @@ unprotected posts. A separate entitlement system must veto both Markdown
 responses and discovery for visitors who cannot see the article. If entitlement
 depends on a cookie or session, also return `false` from
 `content_for_agents_can_cache_markdown` for that post.
+
+Recovered responses follow the normal cache policy. Otherwise-eligible public
+responses may enter VIP's edge cache with omitted blocks or fallback content
+and remain there until normal expiry or a purge. Authenticated, preview,
+password-authorized, and site-designated visitor-specific responses remain
+private and no-store. A failing cache-policy hook also disables shared caching.
+The plugin does not cache generated documents in the WordPress object cache
+or set a public cache lifetime. Edge-cache hits do not run conversion or log
+new conversion failures.
 
 The Markdown path runs during `parse_request`; the query and Accept routes run
 during `template_redirect`. The Accept route uses a case-sensitive substring
