@@ -2005,7 +2005,13 @@ MARKDOWN
 		$markdown = ( new Markdown_Converter() )->post_to_markdown( $post_id );
 
 		$this->assertSame( rtrim( $expected ), $markdown );
-		$this->assert_block_gauntlet_structure( $markdown );
+		// Every visible input marker must survive once and in its original order.
+		preg_match_all( '/SENTINEL-[A-Z-]+/', $html, $input_markers );
+		preg_match_all( '/SENTINEL-[A-Z-]+/', $markdown, $output_markers );
+		$visible_markers = array_values( array_diff( $input_markers[0], array( 'SENTINEL-HIDDEN' ) ) );
+		$this->assertSame( $visible_markers, $output_markers[0] );
+		$this->assertDoesNotMatchRegularExpression( '/[ \t]+$/m', $markdown );
+		$this->assertDoesNotMatchRegularExpression( '/\n{3,}/', $markdown );
 	}
 
 	/**
@@ -2063,100 +2069,6 @@ MARKDOWN
 			),
 			$actual
 		);
-	}
-
-	/**
-	 * Asserts structural invariants for the block-gauntlet fixture.
-	 *
-	 * @param string $markdown Converted fixture Markdown.
-	 */
-	private function assert_block_gauntlet_structure( string $markdown ): void {
-		$sentinels = array(
-			'SENTINEL-START',
-			'SENTINEL-INLINE',
-			'SENTINEL-QUOTE',
-			'SENTINEL-PULLQUOTE',
-			'SENTINEL-CODE',
-			'SENTINEL-GROUP',
-			'SENTINEL-COLUMN-A',
-			'SENTINEL-COLUMN-B',
-			'SENTINEL-BUTTONS-CONTAINER',
-			'SENTINEL-CTA-LINK',
-			'SENTINEL-DETAILS',
-			'SENTINEL-ACCORDION-QUESTION',
-			'SENTINEL-PANEL-ANSWER',
-			'SENTINEL-MATH',
-			'SENTINEL-PREFORMATTED',
-			'SENTINEL-VERSE',
-			'SENTINEL-GALLERY',
-			'SENTINEL-MEDIA-TEXT',
-			'SENTINEL-COVER',
-			'SENTINEL-FILE',
-			'SENTINEL-AUDIO',
-			'SENTINEL-VIDEO',
-			'SENTINEL-EMBED',
-			'SENTINEL-LIST-ITEM',
-			'SENTINEL-LIST-CALLBACK',
-			'SENTINEL-TEXT-COLUMNS',
-			'SENTINEL-FREEFORM',
-			'SENTINEL-RICH-LIST-INTRO',
-			'SENTINEL-RICH-LIST-FOLLOWUP',
-			'SENTINEL-RICH-LIST-NESTED',
-			'SENTINEL-RICH-LIST-END',
-			'SENTINEL-RICH-LIST-SIBLING',
-			'SENTINEL-SOCIAL',
-			'SENTINEL-CUSTOM-QUOTE',
-			'SENTINEL-CUSTOM-SUMMARY',
-			'SENTINEL-CUSTOM-CHILD-DETAILS',
-			'SENTINEL-MEDIA-CUSTOM-IMAGE',
-			'SENTINEL-MEDIA-CUSTOM-CHILD',
-			'SENTINEL-CUSTOM-COVER',
-			'SENTINEL-CUSTOM-GROUP-BEFORE',
-			'SENTINEL-CUSTOM-GROUP-CHILD',
-			'SENTINEL-CUSTOM-GROUP-AFTER',
-			'SENTINEL-TABLE',
-			'SENTINEL-UNKNOWN',
-			'SENTINEL-END',
-		);
-		$last_pos  = -1;
-		foreach ( $sentinels as $sentinel ) {
-			$this->assertSame( 1, substr_count( $markdown, $sentinel ), $sentinel . ' must occur exactly once.' );
-			$position = strpos( $markdown, $sentinel );
-			$this->assertIsInt( $position );
-			$this->assertGreaterThan( $last_pos, $position, $sentinel . ' is out of order.' );
-			$last_pos = $position;
-		}
-
-		$this->assertStringNotContainsString( 'SENTINEL-HIDDEN', $markdown );
-
-		preg_match_all( '/^```$/m', $markdown, $standalone_fences );
-		preg_match_all( '/```/', $markdown, $all_fences );
-		$this->assertNotEmpty( $standalone_fences[0] );
-		$this->assertSame( 0, count( $standalone_fences[0] ) % 2 );
-		$this->assertCount( count( $all_fences[0] ), $standalone_fences[0], 'Every code fence must be standalone.' );
-
-		$lines       = explode( "\n", $markdown );
-		$table_lines = array_values(
-			array_filter(
-				$lines,
-				static function ( string $line ): bool {
-					return str_starts_with( $line, '|' );
-				}
-			)
-		);
-		$this->assertNotEmpty( $table_lines );
-		$column_delimiters = null;
-		foreach ( $table_lines as $table_line ) {
-			$this->assertStringNotContainsString( "\n", $table_line );
-			preg_match_all( '/(?<!\\\\)\|/', $table_line, $delimiters );
-			$column_delimiters ??= count( $delimiters[0] );
-			$this->assertSame( $column_delimiters, count( $delimiters[0] ), 'Table rows must have consistent columns.' );
-		}
-
-		preg_match_all( '/<[^>]+>/', $markdown, $raw_tags );
-		$this->assertSame( array( '<br>' ), array_values( array_unique( $raw_tags[0] ) ) );
-		$this->assertDoesNotMatchRegularExpression( '/[ \t]+$/m', $markdown );
-		$this->assertDoesNotMatchRegularExpression( '/\n{3,}/', $markdown );
 	}
 
 	/**

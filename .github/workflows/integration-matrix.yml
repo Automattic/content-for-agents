@@ -47,25 +47,6 @@ jobs:
       - name: Start WordPress environment
         run: npx wp-env start --config=.wp-env.test.json
 
-      # wp-env selects trunk's PHPUnit library for an alpha maintenance branch.
-      # wordpress-develop names its release branches without "-branch".
-      - name: Match the PHPUnit library to the WordPress branch
-        run: |
-          core_ref='${{ matrix.wordpress }}'
-          if [[ "$core_ref" == master ]]; then
-            phpunit_ref=trunk
-          elif [[ "$core_ref" =~ ^[0-9]+\.[0-9]+-branch$ ]]; then
-            phpunit_ref="${core_ref%-branch}"
-          else
-            echo "Unsupported WordPress core ref: $core_ref" >&2
-            exit 1
-          fi
-
-          path="$(npx wp-env status --config=.wp-env.test.json --json | jq -r .installPath)"
-          dir="$path/WordPress-PHPUnit"
-          git -C "$dir" fetch --depth 1 origin "$phpunit_ref"
-          git -C "$dir" checkout --force FETCH_HEAD
-
       - name: Run integration tests
         run: npm run test:integration
 

@@ -33,6 +33,10 @@ Each passes only when its full matrix succeeds.
 Composer and npm dependencies are development-only. The deployed plugin has
 no JavaScript runtime and does not load Composer's autoloader.
 
+The npm overrides keep `wp-env` on a patched `rimraf` version and Express on
+a patched `qs` version. Remove each override when the parent dependency accepts
+the patched version itself.
+
 ## Set up a checkout
 
 ```sh
