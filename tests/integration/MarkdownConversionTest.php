@@ -1122,6 +1122,42 @@ HTML;
 	}
 
 	/**
+	 * A code block's description, such as a language label, stays out of the code.
+	 */
+	public function test_code_block_description_does_not_appear_in_code(): void {
+		$html = '<pre class="wp-block-code" aria-describedby="shcb-language-1"><span><code class="hljs language-php">echo 1;</code></span><small class="shcb-language" id="shcb-language-1"><span class="shcb-language__label">Code language:</span> <span class="shcb-language__name">PHP</span></small></pre>'
+			. '<pre aria-describedby="caption">echo 2;</pre><p id="caption">Prints two.</p>';
+
+		$this->assertSame(
+			"```php\necho 1;\n```\n\n```\necho 2;\n```\n\nPrints two.",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
+	 * A description that points at the code itself keeps the code.
+	 */
+	public function test_code_block_description_of_the_code_keeps_it(): void {
+		$this->assertSame(
+			"```\necho 1;\n```",
+			( new HTML_To_Markdown_Converter() )->convert( '<pre aria-describedby="c"><code id="c">echo 1;</code></pre>' )
+		);
+	}
+
+	/**
+	 * A code block left open in a table cell cannot hide later content.
+	 */
+	public function test_unclosed_code_block_in_table_cell_keeps_later_content(): void {
+		// The misnested formatting makes the converter replay the HTML as source tokens.
+		$html = '<p><b>B<i>i</b>a</i></p><table><tr><td><pre aria-describedby="d">code</td></tr></table><p id="d">After</p>';
+
+		$this->assertSame(
+			"<strong>B<em>i</em></strong><em>a</em>\n\n| ```<br>code<br>``` |\n| --- |\n\nAfter",
+			( new HTML_To_Markdown_Converter() )->convert( $html )
+		);
+	}
+
+	/**
 	 * Skipped headings cannot change how later buttons are classified.
 	 */
 	public function test_hidden_heading_does_not_leave_heading_context_open(): void {
