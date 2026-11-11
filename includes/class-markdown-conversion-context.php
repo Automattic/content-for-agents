@@ -22,4 +22,7 @@ final class Markdown_Conversion_Context {
 
 	/** @var array<int, array<string, mixed>> */
 	public array $media_stack = array();
+
+	/** @var string[] IDs of elements that describe the open PRE, such as a code language label. */
+	public array $pre_description_ids = array();
 }

@@ -124,6 +124,7 @@ final class HTML_To_Markdown_Converter {
 					|| $decorative_video
 					// Buttons are controls unless they carry a heading's text.
 					|| ( 'BUTTON' === $token_name && 0 === $heading_depth )
+					|| $this->is_code_description( $processor, null !== $table_state['cell'] ? $table_state['cell'] : $document )
 				)
 			) {
 				if ( $processor instanceof WP_HTML_Processor ) {
@@ -340,8 +341,9 @@ final class HTML_To_Markdown_Converter {
 				$this->flush_code( $context );
 			} else {
 				$this->writer->mark_item_block( $context );
-				$context->pre_code     = '';
-				$context->pre_language = $this->code_language( $processor );
+				$context->pre_code            = '';
+				$context->pre_language        = $this->code_language( $processor );
+				$context->pre_description_ids = preg_split( '/\s+/', $this->string_attribute( $processor, 'aria-describedby' ), -1, PREG_SPLIT_NO_EMPTY );
 			}
 			return;
 		}
@@ -549,6 +551,20 @@ final class HTML_To_Markdown_Converter {
 		$this->writer->append_text( $context->output, $markdown, $context->at_line_start, true );
 	}
 
+	/**
+	 * Whether an element describes the code block it follows, such as a language label.
+	 *
+	 * Only content after some code is skipped, so a description that points at the code itself keeps it.
+	 *
+	 * @param WP_HTML_Tag_Processor       $processor Processor at an opening tag.
+	 * @param Markdown_Conversion_Context $context   Conversion context for the current document or table cell.
+	 */
+	private function is_code_description( WP_HTML_Tag_Processor $processor, Markdown_Conversion_Context $context ): bool {
+		return ! empty( $context->pre_description_ids )
+			&& '' !== trim( (string) $context->pre_code )
+			&& in_array( $this->string_attribute( $processor, 'id' ), $context->pre_description_ids, true );
+	}
+
 	/** Read an explicit syntax language from a code element's class list. */
 	private function code_language( WP_HTML_Tag_Processor $processor ): ?string {
 		$classes = $processor->class_list();
@@ -583,7 +599,8 @@ final class HTML_To_Markdown_Converter {
 			}
 			$this->writer->append_line( $context->output, $fence, $context->at_line_start );
 			$this->writer->ensure_blank_line( $context->output, $context->at_line_start );
-			$context->pre_language = null;
+			$context->pre_language        = null;
+			$context->pre_description_ids = array();
 		}
 	}
 }
