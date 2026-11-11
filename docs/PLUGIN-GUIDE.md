@@ -33,6 +33,14 @@ lowercase `text/markdown`; mixed-case spelling does not match. The plugin also
 matches that text when it appears in a parameter, even with `q=0`, so use an
 explicit Markdown URL when standard content negotiation matters to your client.
 
+This matching is deliberate. VIP's edge cache stores a single Markdown version
+of each URL for all Accept values that contain `text/markdown`, and it does not
+read q-values. If the plugin returned HTML to a request such as
+`Accept: text/html, text/markdown;q=0.5`, that HTML could be cached as the
+Markdown version and served to later Markdown requests for the URL. Agents that
+send `text/markdown` generally list it as their preferred type, so ignoring
+q-values does not change what they receive.
+
 ## What you receive
 
 The Markdown response starts with metadata, followed by a title heading and

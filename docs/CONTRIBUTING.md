@@ -103,6 +103,13 @@ contains the lowercase `text/markdown` string, including in `q=0` or quoted
 parameters. Keep this behavior consistent with shared cache variants on the
 supported hosting platform.
 
+Do not add q-value negotiation to this route. The edge cache selects the
+Markdown variant by matching `text/markdown` in the Accept value and does not
+parse q-values. An HTML response to a request that prefers HTML could therefore
+be stored as the Markdown variant and served to later Markdown requests. Sending
+`no-store` with that HTML keeps it out of the variant, but it can also make later
+Markdown requests for the URL bypass the cache.
+
 ## Choose the right test layer
 
 | Layer                 | What it verifies                                                               | Command or method                    |
